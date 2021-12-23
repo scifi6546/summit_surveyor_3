@@ -1,14 +1,18 @@
 mod actions;
 mod audio;
+mod input;
 mod loading;
 mod menu;
 mod player;
+mod terrain;
 
 use crate::actions::ActionsPlugin;
 use crate::audio::InternalAudioPlugin;
+use crate::input::CameraInput;
 use crate::loading::LoadingPlugin;
 use crate::menu::MenuPlugin;
 use crate::player::PlayerPlugin;
+use crate::terrain::TerrainPlugin;
 
 use bevy::app::AppBuilder;
 #[cfg(debug_assertions)]
@@ -33,8 +37,12 @@ pub struct GamePlugin;
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_state(GameState::Loading)
+            .insert_resource(bevy_atmosphere::AtmosphereMat::default())
+            .add_plugin(bevy_atmosphere::AtmospherePlugin { dynamic: false }) // Set to false since we aren't changing the sky's appearance
             .add_plugin(LoadingPlugin)
             .add_plugin(MenuPlugin)
+            .add_plugin(TerrainPlugin)
+            .add_plugin(CameraInput)
             .add_plugin(ActionsPlugin)
             .add_plugin(InternalAudioPlugin)
             .add_plugin(PlayerPlugin);

@@ -1,0 +1,3 @@
+[submodule "smooth-bevy-cameras"]
+	path = smooth-bevy-cameras
+	url = git@github.com:scifi6546/smooth-bevy-cameras.git
