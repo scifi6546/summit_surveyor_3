@@ -76,15 +76,15 @@ impl<T: std::clone::Clone> GraphLayer<T> for Grid<T> {
         return out;
     }
 }
-pub struct GraphView<T> {
-    layers: Vec<Box<dyn GraphLayer<T>>>,
+pub struct GraphView<'a, T> {
+    layers: Vec<&'a dyn GraphLayer<T>>,
 }
-impl<T> From<Vec<Box<dyn GraphLayer<T>>>> for GraphView<T> {
-    fn from(layers: Vec<Box<dyn GraphLayer<T>>>) -> GraphView<T> {
+impl<'a, T> From<Vec<&'a dyn GraphLayer<T>>> for GraphView<'a, T> {
+    fn from(layers: Vec<&'a dyn GraphLayer<T>>) -> GraphView<T> {
         Self { layers }
     }
 }
-impl<T> GraphView<T> {
+impl<'a, T> GraphView<'a, T> {
     pub fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, T)> {
         self.layers
             .iter()
@@ -112,7 +112,7 @@ impl std::cmp::PartialOrd for State {
     }
 }
 /// Gets lowest cost path from start to end
-pub fn dijkstra(graph: GraphView<u32>, start: GridCoord, end: GridCoord) -> Path {
+pub fn dijkstra(graph: &GraphView<u32>, start: GridCoord, end: GridCoord) -> Path {
     let mut dist: HashMap<GridCoord, (u32, Option<GridCoord>)> = HashMap::new();
     dist.insert(start, (0u32, None));
     let mut heap = BinaryHeap::new();
@@ -184,7 +184,7 @@ mod tests {
     fn find_null_path() {
         let grid = Grid::from_val((100, 100), 1u32);
         let path = dijkstra(
-            vec![Box::new(grid) as Box<dyn GraphLayer<u32>>].into(),
+            vec![&grid as &dyn GraphLayer<u32>].into(),
             GridCoord::from_xy(0, 0),
             GridCoord::from_xy(0, 0),
         );
@@ -223,7 +223,7 @@ mod tests {
     fn find_two_path() {
         let grid = Grid::from_val((100, 100), 1u32);
         let path = dijkstra(
-            vec![Box::new(grid) as Box<dyn GraphLayer<u32>>].into(),
+            vec![&grid as &dyn GraphLayer<u32>].into(),
             GridCoord::from_xy(0, 0),
             GridCoord::from_xy(2, 0),
         );
