@@ -26,6 +26,8 @@ impl std::fmt::Debug for GridCoord {
 pub trait GraphLayer<T> {
     /// type specifing special point
     type SpecialPoint;
+    /// gets special points at coord
+    fn get_special_pooints(&self) -> Vec<(Self::SpecialPoint, GridCoord)>;
     fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, T)>;
 }
 pub struct Grid<T: std::clone::Clone, SpecialType> {
@@ -58,6 +60,9 @@ impl<T: std::clone::Clone, S> Grid<T, S> {
 }
 impl<T: std::clone::Clone, S> GraphLayer<T> for Grid<T, S> {
     type SpecialPoint = S;
+    fn get_special_pooints(&self) -> Vec<(Self::SpecialPoint, GridCoord)> {
+        vec![]
+    }
     fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, T)> {
         let (x, y) = coord.to_xy();
         let (size_x, size_y) = self.size();
@@ -106,6 +111,12 @@ impl<'a, T, S> GraphView<'a, T, S> {
         self.layers
             .iter()
             .flat_map(|l| l.get_children(coord))
+            .collect()
+    }
+    pub fn special_points(&self) -> Vec<(S, GridCoord)> {
+        self.layers
+            .iter()
+            .flat_map(|l| l.get_special_pooints())
             .collect()
     }
 }

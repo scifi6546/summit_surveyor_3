@@ -21,7 +21,9 @@ default = [
     "bevy/bevy_winit",
     "bevy/render",
     "bevy/png",
-    "game_plugin/default"
+    "game_plugin/default",
+    # temp fix to allow ide's to check project
+    "native"
 ]
 
 native = [

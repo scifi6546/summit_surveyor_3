@@ -1,7 +1,9 @@
+mod decision;
 use bevy::prelude::*;
+use decision::get_best_decision;
 use slana::{dijkstra, GraphLayer, GraphView, GridCoord, Path};
 pub struct Skiier;
-use super::{LiftLayer, Terrain};
+use super::{LiftLayer, SpecialPoint, Terrain};
 use std::{
     cmp::{min, Reverse},
     collections::BinaryHeap,
@@ -10,73 +12,7 @@ const MAX_SKIIERS: usize = 10;
 pub struct PathT {
     time: f32,
 }
-pub enum DecisionResult {
-    /// Go to point
-    Goto(GridCoord),
-    /// Despawn entity
-    Despawn,
-}
-pub trait Decision {
-    fn get_cost(
-        &self,
-        layers: &[&dyn GraphLayer<u32, SpecialPoint = u32>],
-        start: GridCoord,
-    ) -> (DecisionResult, u32, Path);
-}
-pub struct GoToLiftBottom {
-    lift_bottom: GridCoord,
-}
-pub fn get_decisions(
-    layers: &[&dyn GraphLayer<u32, SpecialPoint = u32>],
-) -> Vec<Box<dyn Decision>> {
-    todo!()
-}
-struct DecisionNode {
-    decision: Box<dyn Decision>,
-    end: GridCoord,
-    total_cost: u32,
-    search_depth: u32,
-}
-impl std::cmp::Ord for DecisionNode {
-    fn cmp(&self, rhs: &Self) -> std::cmp::Ordering {
-        self.total_cost.cmp(&rhs.total_cost)
-    }
-}
-impl std::cmp::PartialOrd for DecisionNode {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl std::cmp::Eq for DecisionNode {}
-impl std::cmp::PartialEq for DecisionNode {
-    fn eq(&self, right: &Self) -> bool {
-        self.total_cost.eq(&right.total_cost)
-    }
-}
-const SEARCH_DEPTH: u32 = 3;
 
-pub fn get_best_decision(
-    layers: &[&dyn GraphLayer<u32, SpecialPoint = u32>],
-    start: GridCoord,
-) -> Vec<Box<dyn Decision>> {
-    let mut priority = BinaryHeap::new();
-    let mut decisions = get_decisions(layers);
-    for decision in decisions.drain(..) {
-        let (result, cost, path) = decision.get_cost(layers, start);
-        priority.push(Reverse(DecisionNode {
-            decision,
-            end: path.get_end(),
-            search_depth: 1,
-            total_cost: cost,
-        }));
-    }
-    while let Some(rev_decision) = priority.pop() {
-        let decision = rev_decision.0;
-        todo!()
-    }
-
-    todo!()
-}
 pub fn build_skiiers(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -85,13 +21,13 @@ pub fn build_skiiers(
     terrain: Query<&Terrain, ()>,
     lift_query: Query<&LiftLayer, ()>,
 ) {
-    let layers: Vec<&dyn GraphLayer<u32, SpecialPoint = u32>> = terrain
+    let layers: Vec<&dyn GraphLayer<u32, SpecialPoint = SpecialPoint>> = terrain
         .iter()
-        .map(|terrain| &terrain.grid as &dyn GraphLayer<u32, SpecialPoint = u32>)
+        .map(|terrain| &terrain.grid as &dyn GraphLayer<u32, SpecialPoint = SpecialPoint>)
         .chain(
             lift_query
                 .iter()
-                .map(|l| l as &dyn GraphLayer<u32, SpecialPoint = u32>),
+                .map(|l| l as &dyn GraphLayer<u32, SpecialPoint = SpecialPoint>),
         )
         .collect();
 
