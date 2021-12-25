@@ -90,12 +90,21 @@ pub struct Path {
     pub points: Vec<GridCoord>,
 }
 impl Path {
+    pub fn cost(&self) -> u32 {
+        self.total_cost
+    }
     pub fn get_end(&self) -> GridCoord {
         self.points[self.points.len() - 1]
     }
     /// appends path onto end of self
-    pub fn append(&mut self, other: Self) {
-        todo!()
+    pub fn append(&mut self, mut other: Self) {
+        self.total_cost += other.total_cost;
+        for item in other.points.drain(..) {
+            let last = self.points[self.points.len() - 1];
+            if last != item {
+                self.points.push(item)
+            }
+        }
     }
 }
 pub struct GraphView<'a, T, S> {

@@ -1,21 +1,26 @@
 use super::SpecialPoint;
-use slana::{GraphLayer, GridCoord, Path};
-use std::{cmp::Reverse, collections::BinaryHeap};
+use bevy::prelude::*;
+use slana::{dijkstra, GraphLayer, GraphView, GridCoord, Path};
+use std::{
+    cmp::{max, Reverse},
+    collections::BinaryHeap,
+};
+#[derive(Debug)]
 pub enum DecisionResult {
     /// Go to point
     Goto(GridCoord),
     /// Despawn entity
     Despawn,
 }
-pub trait Decision {
+pub trait Decision: std::fmt::Debug {
     fn get_cost(
         &self,
-        layers: &[&dyn GraphLayer<u32, SpecialPoint = SpecialPoint>],
+        view: &GraphView<u32, SpecialPoint>,
         start: GridCoord,
     ) -> (DecisionResult, u32, Path);
     fn clone_box(&self) -> Box<dyn Decision>;
 }
-
+#[derive(Debug)]
 struct DecisionNode {
     /// refrence to decision in node
     decision: usize,
@@ -40,45 +45,53 @@ impl std::cmp::PartialEq for DecisionNode {
         self.total_cost.eq(&right.total_cost)
     }
 }
+#[derive(Debug)]
 struct DecisionItem {
     decision: Box<dyn Decision>,
     cost: u32,
     path: Path,
+    search_depth: u32,
     /// refrence to previous decision
     previous_decision: Option<usize>,
 }
 const SEARCH_DEPTH: u32 = 3;
 
 pub fn get_best_decision(
-    layers: &[&dyn GraphLayer<u32, SpecialPoint = SpecialPoint>],
+    view: &GraphView<u32, SpecialPoint>,
     start: GridCoord,
 ) -> Vec<Box<dyn Decision>> {
     let mut priority = BinaryHeap::new();
     let mut decision_vec = vec![];
-    let mut decisions = get_decisions(layers);
+    let mut decisions = get_decisions(view, start);
     for (i, decision) in decisions.drain(..).enumerate() {
-        let (result, cost, path) = decision.get_cost(layers, start);
+        let (result, cost, path) = decision.get_cost(view, start);
         let end = path.get_end();
         decision_vec.push(DecisionItem {
             decision,
             path,
             cost,
             previous_decision: None,
+            search_depth: 0,
         });
         priority.push(Reverse(DecisionNode {
             decision: i,
             end,
-            search_depth: 1,
+            search_depth: 0,
             total_cost: cost,
         }));
     }
     while let Some(rev_decision) = priority.pop() {
         let decision_node = rev_decision.0;
+        info!("processing node: {:#?}", decision_node);
         if decision_node.search_depth == SEARCH_DEPTH {
+            for d in decision_vec.iter() {
+                info!("decsion vec: {:#?}", d);
+            }
             let mut out = vec![];
             let mut current_idx = decision_node.decision;
             loop {
                 out.push(decision_vec[current_idx].decision.clone_box());
+
                 if let Some(idx) = decision_vec[current_idx].previous_decision {
                     current_idx = idx;
                 } else {
@@ -87,18 +100,20 @@ pub fn get_best_decision(
                 }
             }
         } else {
-            let mut decisions = get_decisions(layers);
-            for (i, decision) in decisions.drain(..).enumerate() {
-                let (result, cost, path) = decision.get_cost(layers, decision_node.end);
+            let mut decisions = get_decisions(view, decision_node.end);
+            for decision in decisions.drain(..) {
+                let (result, cost, path) = decision.get_cost(view, decision_node.end);
                 let end = path.get_end();
+                let index = decision_vec.len();
                 decision_vec.push(DecisionItem {
                     decision,
                     path,
                     cost,
+                    search_depth: decision_node.search_depth + 1,
                     previous_decision: Some(decision_node.decision),
                 });
                 priority.push(Reverse(DecisionNode {
-                    decision: i,
+                    decision: index,
                     end,
                     search_depth: decision_node.search_depth + 1,
                     total_cost: decision_node.total_cost + cost,
@@ -110,29 +125,44 @@ pub fn get_best_decision(
 }
 
 pub fn get_decisions(
-    layers: &[&dyn GraphLayer<u32, SpecialPoint = SpecialPoint>],
+    view: &GraphView<u32, SpecialPoint>,
+    position: GridCoord,
 ) -> Vec<Box<dyn Decision>> {
-    GoToLiftBottom::new(layers)
+    GoToLiftBottom::new(view, position)
         .drain(..)
         .map(|d| d as Box<dyn Decision>)
         .collect()
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GoToLiftBottom {
     lift_bottom: GridCoord,
 }
 impl GoToLiftBottom {
-    pub fn new(layers: &[&dyn GraphLayer<u32, SpecialPoint = SpecialPoint>]) -> Vec<Box<Self>> {
-        todo!()
+    pub fn new(view: &GraphView<u32, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
+        view.special_points()
+            .iter()
+            .filter(|(_type, position)| *position != start)
+            .filter_map(|(point_type, lift_bottom)| match point_type {
+                SpecialPoint::LiftBottom => Some(Box::new(Self {
+                    lift_bottom: *lift_bottom,
+                })),
+                SpecialPoint::LiftTop => None,
+            })
+            .collect()
     }
 }
 impl Decision for GoToLiftBottom {
     fn get_cost(
         &self,
-        layers: &[&dyn GraphLayer<u32, SpecialPoint = SpecialPoint>],
+        view: &GraphView<u32, SpecialPoint>,
         start: GridCoord,
     ) -> (DecisionResult, u32, Path) {
-        todo!()
+        if self.lift_bottom == start {
+            error!("invalid state for go to lift bottom, start==end");
+        }
+        let path = dijkstra(&view, start, self.lift_bottom);
+        let cost = max(path.cost(), 1);
+        (DecisionResult::Goto(self.lift_bottom), cost, path)
     }
     fn clone_box(&self) -> Box<dyn Decision> {
         Box::new(self.clone())

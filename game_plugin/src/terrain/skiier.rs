@@ -8,7 +8,7 @@ use std::{
     cmp::{min, Reverse},
     collections::BinaryHeap,
 };
-const MAX_SKIIERS: usize = 10;
+const MAX_SKIIERS: usize = 1;
 pub struct PathT {
     time: f32,
 }
@@ -33,25 +33,20 @@ pub fn build_skiiers(
 
     let num_skiiers = skiier_query.iter().count();
     //   let view: GraphView<u32> = layers.into();
-
+    let view = layers.into();
     for i in 0..MAX_SKIIERS - num_skiiers {
         info!("spawning {} skiier", i);
-        let decisions = get_best_decision(&layers, GridCoord::from_xy(i as i32 % 5, 0));
-        let (_, _, mut path) = decisions[0].get_cost(&layers, GridCoord::from_xy(i as i32 % 5, 0));
+        let decisions = get_best_decision(&view, GridCoord::from_xy(i as i32 % 5, 0));
+        let (r, _, mut path) = decisions[0].get_cost(&view, GridCoord::from_xy(i as i32 % 5, 0));
+        info!("decision result: {:#?}", r);
         let mut end = path.get_end();
         for i in 1..decisions.len() {
-            let (_, _, new_path) = decisions[i].get_cost(&layers, end);
+            let (r, _, new_path) = decisions[i].get_cost(&view, end);
+            info!("decision result: {:#?}", r);
             end = new_path.get_end();
             path.append(new_path);
         }
-
-        /*
-        let path = dijkstra(
-            &view,
-            GridCoord::from_xy(i as i32 % 5, 0),
-            GridCoord::from_xy(4, 4),
-        );
-        */
+        info!("decsisions: {}", decisions.len());
         commands
             .spawn_bundle(PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
