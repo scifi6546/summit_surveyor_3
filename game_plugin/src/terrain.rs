@@ -13,6 +13,7 @@ pub struct LiftLayer {
     up_cost: u32,
 }
 impl GraphLayer<u32> for LiftLayer {
+    type SpecialPoint = u32;
     fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, u32)> {
         if coord == self.bottom {
             vec![(self.top, self.up_cost)]
@@ -34,7 +35,7 @@ impl Plugin for TerrainPlugin {
     }
 }
 pub struct Terrain {
-    grid: Grid<u32>,
+    grid: Grid<u32, u32>,
 }
 impl Terrain {
     pub fn basic(size_x: u32, size_y: u32) -> Self {

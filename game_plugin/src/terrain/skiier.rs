@@ -19,14 +19,16 @@ pub enum DecisionResult {
 pub trait Decision {
     fn get_cost(
         &self,
-        layers: &[&dyn GraphLayer<u32>],
+        layers: &[&dyn GraphLayer<u32, SpecialPoint = u32>],
         start: GridCoord,
     ) -> (DecisionResult, u32, Path);
 }
 pub struct GoToLiftBottom {
     lift_bottom: GridCoord,
 }
-pub fn get_decisions(layers: &[&dyn GraphLayer<u32>]) -> Vec<Box<dyn Decision>> {
+pub fn get_decisions(
+    layers: &[&dyn GraphLayer<u32, SpecialPoint = u32>],
+) -> Vec<Box<dyn Decision>> {
     todo!()
 }
 struct DecisionNode {
@@ -54,7 +56,7 @@ impl std::cmp::PartialEq for DecisionNode {
 const SEARCH_DEPTH: u32 = 3;
 
 pub fn get_best_decision(
-    layers: &[&dyn GraphLayer<u32>],
+    layers: &[&dyn GraphLayer<u32, SpecialPoint = u32>],
     start: GridCoord,
 ) -> Vec<Box<dyn Decision>> {
     let mut priority = BinaryHeap::new();
@@ -83,10 +85,14 @@ pub fn build_skiiers(
     terrain: Query<&Terrain, ()>,
     lift_query: Query<&LiftLayer, ()>,
 ) {
-    let layers: Vec<&dyn GraphLayer<u32>> = terrain
+    let layers: Vec<&dyn GraphLayer<u32, SpecialPoint = u32>> = terrain
         .iter()
-        .map(|terrain| &terrain.grid as &dyn GraphLayer<u32>)
-        .chain(lift_query.iter().map(|l| l as &dyn GraphLayer<u32>))
+        .map(|terrain| &terrain.grid as &dyn GraphLayer<u32, SpecialPoint = u32>)
+        .chain(
+            lift_query
+                .iter()
+                .map(|l| l as &dyn GraphLayer<u32, SpecialPoint = u32>),
+        )
         .collect();
 
     let num_skiiers = skiier_query.iter().count();
