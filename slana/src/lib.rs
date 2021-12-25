@@ -46,8 +46,8 @@ impl<T: std::clone::Clone> Grid<T> {
     pub fn size(&self) -> (usize, usize) {
         (self.dim_x, self.dim_y)
     }
-    pub fn get(&self, val: (i32, i32)) -> &T {
-        &self.data[self.get_dim(val.0 as usize, val.1 as usize)]
+    pub fn get(&self, x: i32, y: i32) -> &T {
+        &self.data[self.get_dim(x as usize, y as usize)]
     }
     /// Gets index in array
     fn get_dim(&self, x: usize, y: usize) -> usize {
@@ -61,16 +61,16 @@ impl<T: std::clone::Clone> GraphLayer<T> for Grid<T> {
         let mut out = vec![];
         out.reserve(4);
         if x - 1 >= 0 && x - 1 < size_x as i32 && y >= 0 && y < size_y as i32 {
-            out.push((GridCoord::from_xy(x - 1, y), self.get((x - 1, y)).clone()));
+            out.push((GridCoord::from_xy(x - 1, y), self.get(x - 1, y).clone()));
         }
         if x + 1 >= 0 && x + 1 < size_x as i32 && y >= 0 && y < size_y as i32 {
-            out.push((GridCoord::from_xy(x + 1, y), self.get((x + 1, y)).clone()));
+            out.push((GridCoord::from_xy(x + 1, y), self.get(x + 1, y).clone()));
         }
         if x >= 0 && x < size_x as i32 && y - 1 >= 0 && y - 1 < size_y as i32 {
-            out.push((GridCoord::from_xy(x, y - 1), self.get((x, y - 1)).clone()));
+            out.push((GridCoord::from_xy(x, y - 1), self.get(x, y - 1).clone()));
         }
         if x >= 0 && x < size_x as i32 && y + 1 >= 0 && y + 1 < size_y as i32 {
-            out.push((GridCoord::from_xy(x, y + 1), self.get((x, y + 1)).clone()));
+            out.push((GridCoord::from_xy(x, y + 1), self.get(x, y + 1).clone()));
         }
 
         return out;
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn new() {
         let grid = Grid::from_val((100, 100), 0usize);
-        assert_eq!(*grid.get((10, 10)), 0);
+        assert_eq!(*grid.get(10, 10), 0);
     }
     #[test]
     fn grid_point() {
@@ -184,7 +184,7 @@ mod tests {
     fn find_null_path() {
         let grid = Grid::from_val((100, 100), 1u32);
         let path = dijkstra(
-            vec![&grid as &dyn GraphLayer<u32>].into(),
+            &vec![&grid as &dyn GraphLayer<u32>].into(),
             GridCoord::from_xy(0, 0),
             GridCoord::from_xy(0, 0),
         );
@@ -223,7 +223,7 @@ mod tests {
     fn find_two_path() {
         let grid = Grid::from_val((100, 100), 1u32);
         let path = dijkstra(
-            vec![&grid as &dyn GraphLayer<u32>].into(),
+            &vec![&grid as &dyn GraphLayer<u32>].into(),
             GridCoord::from_xy(0, 0),
             GridCoord::from_xy(2, 0),
         );

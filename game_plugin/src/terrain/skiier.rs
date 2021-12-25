@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use slana::{dijkstra, GraphLayer, GraphView, GridCoord, Path};
 pub struct Skiier;
-use super::Terrain;
+use super::{LiftLayer, Terrain};
 use std::cmp::min;
-const MAX_SKIIERS: usize = 1;
+const MAX_SKIIERS: usize = 10;
 pub struct PathT {
     time: f32,
 }
@@ -13,17 +13,23 @@ pub fn build_skiiers(
     mut materials: ResMut<Assets<StandardMaterial>>,
     skiier_query: Query<(), With<Skiier>>,
     terrain: Query<&Terrain, ()>,
+    lift_query: Query<&LiftLayer, ()>,
 ) {
     let layers: Vec<&dyn GraphLayer<u32>> = terrain
         .iter()
         .map(|terrain| &terrain.grid as &dyn GraphLayer<u32>)
+        .chain(lift_query.iter().map(|l| l as &dyn GraphLayer<u32>))
         .collect();
 
     let num_skiiers = skiier_query.iter().count();
     let view: GraphView<u32> = layers.into();
     for i in 0..MAX_SKIIERS - num_skiiers {
         info!("spawning {} skiier", i);
-        let path = dijkstra(&view, GridCoord::from_xy(0, 0), GridCoord::from_xy(40, 10));
+        let path = dijkstra(
+            &view,
+            GridCoord::from_xy(i as i32 % 5, 0),
+            GridCoord::from_xy(4, 4),
+        );
         commands
             .spawn_bundle(PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
@@ -50,7 +56,7 @@ pub fn skiier_path_follow(
             let (x_next, y_next) = path.points[idx + 1].to_xy();
             let delta_time = path_time.time - idx as f32;
             transform.translation.x = x_next as f32 * delta_time + (1.0 - delta_time) * x as f32;
-            transform.translation.y = y_next as f32 * delta_time + (1.0 - delta_time) * y as f32;
+            transform.translation.z = y_next as f32 * delta_time + (1.0 - delta_time) * y as f32;
         } else {
             transform.translation.x = x as f32;
             transform.translation.z = y as f32;

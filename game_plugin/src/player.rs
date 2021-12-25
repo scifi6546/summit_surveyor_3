@@ -41,6 +41,16 @@ fn spawn_player(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
+    commands.spawn_bundle(LightBundle {
+        light: Light {
+            color: Color::rgb(1.0, 1.0, 1.0).into(),
+            intensity: 8000.0,
+            range: 500.0,
+            ..Default::default()
+        },
+        transform: Transform::from_xyz(50.0, 40.0, 50.0),
+        ..Default::default()
+    });
     commands
         .spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
