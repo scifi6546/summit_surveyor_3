@@ -28,11 +28,6 @@ pub struct Grid<T: std::clone::Clone> {
     dim_x: usize,
     dim_y: usize,
 }
-#[derive(PartialEq, Debug)]
-pub struct Path {
-    pub total_cost: u32,
-    pub points: Vec<GridCoord>,
-}
 impl<T: std::clone::Clone> Grid<T> {
     /// Creates grid based off of initial value
     pub fn from_val(size: (u32, u32), val: T) -> Self {
@@ -52,6 +47,20 @@ impl<T: std::clone::Clone> Grid<T> {
     /// Gets index in array
     fn get_dim(&self, x: usize, y: usize) -> usize {
         x * self.dim_y + y
+    }
+}
+#[derive(PartialEq, Debug)]
+pub struct Path {
+    pub total_cost: u32,
+    pub points: Vec<GridCoord>,
+}
+impl Path {
+    pub fn get_end(&self) -> GridCoord {
+        self.points[self.points.len() - 1]
+    }
+    /// appends path onto end of self
+    pub fn append(&mut self, other: Self) {
+        todo!()
     }
 }
 impl<T: std::clone::Clone> GraphLayer<T> for Grid<T> {
