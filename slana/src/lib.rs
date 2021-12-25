@@ -1,4 +1,7 @@
-use std::collections::{BinaryHeap, HashMap};
+use std::{
+    collections::{BinaryHeap, HashMap},
+    marker::PhantomData,
+};
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 pub struct GridCoord(i64);
 impl GridCoord {
@@ -21,17 +24,21 @@ impl std::fmt::Debug for GridCoord {
     }
 }
 pub trait GraphLayer<T> {
+    /// type specifing special point
+    type SpecialPoint;
     fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, T)>;
 }
-pub struct Grid<T: std::clone::Clone> {
+pub struct Grid<T: std::clone::Clone, SpecialType> {
+    special_marker: PhantomData<SpecialType>,
     data: Vec<T>,
     dim_x: usize,
     dim_y: usize,
 }
-impl<T: std::clone::Clone> Grid<T> {
+impl<T: std::clone::Clone, S> Grid<T, S> {
     /// Creates grid based off of initial value
     pub fn from_val(size: (u32, u32), val: T) -> Self {
         Self {
+            special_marker: PhantomData,
             data: vec![val; size.0 as usize * size.1 as usize],
             dim_x: size.0 as usize,
             dim_y: size.1 as usize,
@@ -49,21 +56,8 @@ impl<T: std::clone::Clone> Grid<T> {
         x * self.dim_y + y
     }
 }
-#[derive(PartialEq, Debug)]
-pub struct Path {
-    pub total_cost: u32,
-    pub points: Vec<GridCoord>,
-}
-impl Path {
-    pub fn get_end(&self) -> GridCoord {
-        self.points[self.points.len() - 1]
-    }
-    /// appends path onto end of self
-    pub fn append(&mut self, other: Self) {
-        todo!()
-    }
-}
-impl<T: std::clone::Clone> GraphLayer<T> for Grid<T> {
+impl<T: std::clone::Clone, S> GraphLayer<T> for Grid<T, S> {
+    type SpecialPoint = S;
     fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, T)> {
         let (x, y) = coord.to_xy();
         let (size_x, size_y) = self.size();
@@ -85,15 +79,29 @@ impl<T: std::clone::Clone> GraphLayer<T> for Grid<T> {
         return out;
     }
 }
-pub struct GraphView<'a, T> {
-    layers: Vec<&'a dyn GraphLayer<T>>,
+#[derive(PartialEq, Debug)]
+pub struct Path {
+    pub total_cost: u32,
+    pub points: Vec<GridCoord>,
 }
-impl<'a, T> From<Vec<&'a dyn GraphLayer<T>>> for GraphView<'a, T> {
-    fn from(layers: Vec<&'a dyn GraphLayer<T>>) -> GraphView<T> {
+impl Path {
+    pub fn get_end(&self) -> GridCoord {
+        self.points[self.points.len() - 1]
+    }
+    /// appends path onto end of self
+    pub fn append(&mut self, other: Self) {
+        todo!()
+    }
+}
+pub struct GraphView<'a, T, S> {
+    layers: Vec<&'a dyn GraphLayer<T, SpecialPoint = S>>,
+}
+impl<'a, T, S> From<Vec<&'a dyn GraphLayer<T, SpecialPoint = S>>> for GraphView<'a, T, S> {
+    fn from(layers: Vec<&'a dyn GraphLayer<T, SpecialPoint = S>>) -> GraphView<T, S> {
         Self { layers }
     }
 }
-impl<'a, T> GraphView<'a, T> {
+impl<'a, T, S> GraphView<'a, T, S> {
     pub fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, T)> {
         self.layers
             .iter()
@@ -121,7 +129,7 @@ impl std::cmp::PartialOrd for State {
     }
 }
 /// Gets lowest cost path from start to end
-pub fn dijkstra(graph: &GraphView<u32>, start: GridCoord, end: GridCoord) -> Path {
+pub fn dijkstra<S>(graph: &GraphView<u32, S>, start: GridCoord, end: GridCoord) -> Path {
     let mut dist: HashMap<GridCoord, (u32, Option<GridCoord>)> = HashMap::new();
     dist.insert(start, (0u32, None));
     let mut heap = BinaryHeap::new();
@@ -181,7 +189,7 @@ mod tests {
     use super::*;
     #[test]
     fn new() {
-        let grid = Grid::from_val((100, 100), 0usize);
+        let grid: Grid<usize, u8> = Grid::from_val((100, 100), 0usize);
         assert_eq!(*grid.get(10, 10), 0);
     }
     #[test]
@@ -191,9 +199,9 @@ mod tests {
     }
     #[test]
     fn find_null_path() {
-        let grid = Grid::from_val((100, 100), 1u32);
+        let grid: Grid<u32, u32> = Grid::from_val((100, 100), 1u32);
         let path = dijkstra(
-            &vec![&grid as &dyn GraphLayer<u32>].into(),
+            &vec![&grid as &dyn GraphLayer<u32, SpecialPoint = _>].into(),
             GridCoord::from_xy(0, 0),
             GridCoord::from_xy(0, 0),
         );
@@ -207,7 +215,7 @@ mod tests {
     }
     #[test]
     fn grid_children() {
-        let grid = Grid::from_val((100, 100), 1u32);
+        let grid: Grid<u32, u32> = Grid::from_val((100, 100), 1u32);
         let mut center_children = grid.get_children(GridCoord::from_xy(1, 1));
         center_children.sort();
         let mut test_data = vec![
@@ -230,9 +238,9 @@ mod tests {
     }
     #[test]
     fn find_two_path() {
-        let grid = Grid::from_val((100, 100), 1u32);
+        let grid: Grid<u32, u32> = Grid::from_val((100, 100), 1u32);
         let path = dijkstra(
-            &vec![&grid as &dyn GraphLayer<u32>].into(),
+            &vec![&grid as &dyn GraphLayer<u32, SpecialPoint = u32>].into(),
             GridCoord::from_xy(0, 0),
             GridCoord::from_xy(2, 0),
         );
