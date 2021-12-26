@@ -1,18 +1,48 @@
 mod decision;
+
 use bevy::prelude::*;
-use decision::get_best_decision;
-use slana::{dijkstra, GraphLayer, GraphView, GridCoord, Path};
+use decision::{get_best_decision, DecisionResult};
+use slana::{GraphLayer, GraphView, GridCoord, Path};
 pub struct Skiier;
+#[derive(Debug)]
+pub struct SkiierData {
+    despawn_at_end: bool,
+    total_cost: u32,
+}
 use super::{LiftLayer, SpecialPoint, Terrain};
-use std::{
-    cmp::{min, Reverse},
-    collections::BinaryHeap,
-};
+use std::cmp::min;
 const MAX_SKIIERS: usize = 1;
 pub struct PathT {
     time: f32,
 }
+fn build_decision(
+    view: &GraphView<u32, SpecialPoint>,
+    start: GridCoord,
+    base_cost: u32,
+) -> (SkiierData, Path) {
+    let decisions = get_best_decision(&view, start, base_cost);
+    let (result, cost, mut path) = decisions[0].get_cost(&view, start);
 
+    let mut end = path.get_end();
+    let mut skiier = SkiierData {
+        despawn_at_end: false,
+        total_cost: cost,
+    };
+    if result != DecisionResult::Despawn {
+        for i in 1..decisions.len() {
+            let (result, _, new_path) = decisions[i].get_cost(&view, end);
+            end = new_path.get_end();
+            path.append(new_path);
+            if result == DecisionResult::Despawn {
+                skiier.despawn_at_end = true;
+                break;
+            }
+        }
+    } else {
+        skiier.despawn_at_end = true;
+    }
+    return (skiier, path);
+}
 pub fn build_skiiers(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -35,18 +65,7 @@ pub fn build_skiiers(
     //   let view: GraphView<u32> = layers.into();
     let view = layers.into();
     for i in 0..MAX_SKIIERS - num_skiiers {
-        info!("spawning {} skiier", i);
-        let decisions = get_best_decision(&view, GridCoord::from_xy(i as i32 % 5, 0));
-        let (r, _, mut path) = decisions[0].get_cost(&view, GridCoord::from_xy(i as i32 % 5, 0));
-        info!("decision result: {:#?}", r);
-        let mut end = path.get_end();
-        for i in 1..decisions.len() {
-            let (r, _, new_path) = decisions[i].get_cost(&view, end);
-            info!("decision result: {:#?}", r);
-            end = new_path.get_end();
-            path.append(new_path);
-        }
-        info!("decsisions: {}", decisions.len());
+        let (skiier, path) = build_decision(&view, GridCoord::from_xy(i as i32 % 5, 0), 0);
         commands
             .spawn_bundle(PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
@@ -54,29 +73,67 @@ pub fn build_skiiers(
                 ..Default::default()
             })
             .insert(Skiier)
+            .insert(skiier)
             .insert(PathT { time: 0.0 })
             .insert(path);
     }
 }
 pub fn skiier_path_follow(
+    mut commands: Commands,
     time: Res<Time>,
-    mut skiiers: Query<(&Path, &mut PathT, &mut Transform), With<Skiier>>,
+    terrain: Query<&Terrain, ()>,
+    lift_query: Query<&LiftLayer, ()>,
+    mut skiiers: Query<
+        (
+            Entity,
+            &mut Path,
+            &mut PathT,
+            &mut Transform,
+            &mut SkiierData,
+        ),
+        With<Skiier>,
+    >,
 ) {
-    for (path, mut path_time, mut transform) in skiiers.iter_mut() {
+    let layers: Vec<&dyn GraphLayer<u32, SpecialPoint = SpecialPoint>> = terrain
+        .iter()
+        .map(|terrain| &terrain.grid as &dyn GraphLayer<u32, SpecialPoint = SpecialPoint>)
+        .chain(
+            lift_query
+                .iter()
+                .map(|l| l as &dyn GraphLayer<u32, SpecialPoint = SpecialPoint>),
+        )
+        .collect();
+    let view = layers.into();
+    for (entity, mut path, mut path_time, mut transform, mut skiier_data) in skiiers.iter_mut() {
         if path.points.len() == 0 {
             continue;
         }
-        path_time.time += 1.0 * time.delta_seconds();
-        let idx = min(path_time.time.floor() as usize, path.points.len() - 1);
-        let (x, y) = path.points[idx].to_xy();
-        if idx < path.points.len() - 1 {
-            let (x_next, y_next) = path.points[idx + 1].to_xy();
-            let delta_time = path_time.time - idx as f32;
-            transform.translation.x = x_next as f32 * delta_time + (1.0 - delta_time) * x as f32;
-            transform.translation.z = y_next as f32 * delta_time + (1.0 - delta_time) * y as f32;
+        path_time.time += 10.0 * time.delta_seconds();
+        if path_time.time < path.points.len() as f32 - 1.0 {
+            let idx = min(path_time.time.floor() as usize, path.points.len() - 1);
+            let (x, y) = path.points[idx].to_xy();
+            if idx < path.points.len() - 1 {
+                let (x_next, y_next) = path.points[idx + 1].to_xy();
+                let delta_time = path_time.time - idx as f32;
+                transform.translation.x =
+                    x_next as f32 * delta_time + (1.0 - delta_time) * x as f32;
+                transform.translation.z =
+                    y_next as f32 * delta_time + (1.0 - delta_time) * y as f32;
+            } else {
+                transform.translation.x = x as f32;
+                transform.translation.z = y as f32;
+            }
         } else {
-            transform.translation.x = x as f32;
-            transform.translation.z = y as f32;
+            if skiier_data.despawn_at_end {
+                commands.entity(entity).despawn();
+            } else {
+                let old_cost = skiier_data.total_cost;
+                let (data, new_path) = build_decision(&view, path.get_end(), old_cost);
+                *skiier_data = data;
+                skiier_data.total_cost += old_cost;
+                *path = new_path;
+                path_time.time = 0.0;
+            }
         }
     }
 }

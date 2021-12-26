@@ -3,9 +3,9 @@ use bevy::prelude::*;
 use slana::{dijkstra, GraphLayer, GraphView, GridCoord, Path};
 use std::{
     cmp::{max, Reverse},
-    collections::BinaryHeap,
+    collections::{BinaryHeap, HashMap},
 };
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum DecisionResult {
     /// Go to point
     Goto(GridCoord),
@@ -27,6 +27,7 @@ struct DecisionNode {
     end: GridCoord,
     total_cost: u32,
     search_depth: u32,
+    result: DecisionResult,
 }
 
 impl std::cmp::Ord for DecisionNode {
@@ -59,13 +60,15 @@ const SEARCH_DEPTH: u32 = 3;
 pub fn get_best_decision(
     view: &GraphView<u32, SpecialPoint>,
     start: GridCoord,
+    base_cost: u32,
 ) -> Vec<Box<dyn Decision>> {
     let mut priority = BinaryHeap::new();
     let mut decision_vec = vec![];
     let mut decisions = get_decisions(view, start);
     for (i, decision) in decisions.drain(..).enumerate() {
-        let (result, cost, path) = decision.get_cost(view, start);
+        let (result, mut cost, path) = decision.get_cost(view, start);
         let end = path.get_end();
+        cost += base_cost;
         decision_vec.push(DecisionItem {
             decision,
             path,
@@ -78,15 +81,14 @@ pub fn get_best_decision(
             end,
             search_depth: 0,
             total_cost: cost,
+            result,
         }));
     }
     while let Some(rev_decision) = priority.pop() {
         let decision_node = rev_decision.0;
-        info!("processing node: {:#?}", decision_node);
-        if decision_node.search_depth == SEARCH_DEPTH {
-            for d in decision_vec.iter() {
-                info!("decsion vec: {:#?}", d);
-            }
+        if decision_node.search_depth == SEARCH_DEPTH
+            || decision_node.result == DecisionResult::Despawn
+        {
             let mut out = vec![];
             let mut current_idx = decision_node.decision;
             loop {
@@ -117,6 +119,7 @@ pub fn get_best_decision(
                     end,
                     search_depth: decision_node.search_depth + 1,
                     total_cost: decision_node.total_cost + cost,
+                    result,
                 }));
             }
         }
@@ -131,6 +134,16 @@ pub fn get_decisions(
     GoToLiftBottom::new(view, position)
         .drain(..)
         .map(|d| d as Box<dyn Decision>)
+        .chain(
+            GoToParkingLot::new(view, position)
+                .drain(..)
+                .map(|d| d as Box<dyn Decision>),
+        )
+        .chain(
+            GoUpLift::new(view, position)
+                .drain(..)
+                .map(|d| d as Box<dyn Decision>),
+        )
         .collect()
 }
 #[derive(Clone, Debug)]
@@ -141,12 +154,12 @@ impl GoToLiftBottom {
     pub fn new(view: &GraphView<u32, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
         view.special_points()
             .iter()
-            .filter(|(_type, position)| *position != start)
-            .filter_map(|(point_type, lift_bottom)| match point_type {
+            .filter(|(_type, position, _index)| *position != start)
+            .filter_map(|(point_type, lift_bottom, _index)| match point_type {
                 SpecialPoint::LiftBottom => Some(Box::new(Self {
                     lift_bottom: *lift_bottom,
                 })),
-                SpecialPoint::LiftTop => None,
+                _ => None,
             })
             .collect()
     }
@@ -163,6 +176,117 @@ impl Decision for GoToLiftBottom {
         let path = dijkstra(&view, start, self.lift_bottom);
         let cost = max(path.cost(), 1);
         (DecisionResult::Goto(self.lift_bottom), cost, path)
+    }
+    fn clone_box(&self) -> Box<dyn Decision> {
+        Box::new(self.clone())
+    }
+}
+#[derive(Debug, Clone)]
+pub struct GoUpLift {
+    lift_bottom: GridCoord,
+    lift_top: GridCoord,
+}
+struct PartialLift {
+    lift_bottom: Option<GridCoord>,
+    lift_top: Option<GridCoord>,
+}
+impl GoUpLift {
+    pub fn new(view: &GraphView<u32, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
+        let mut lifts: HashMap<usize, PartialLift> = HashMap::new();
+        view.special_points()
+            .iter()
+            .filter(|(point_type, position, _index)| match point_type {
+                SpecialPoint::LiftTop => true,
+                SpecialPoint::LiftBottom => true,
+                _ => false,
+            })
+            .for_each(|(point_type, position, index)| {
+                if let Some(lift) = lifts.get_mut(index) {
+                    match point_type {
+                        SpecialPoint::LiftTop => lift.lift_top = Some(*position),
+                        SpecialPoint::LiftBottom => lift.lift_bottom = Some(*position),
+                        _ => error!("invalid point type: {:#?}", point_type),
+                    }
+                } else {
+                    match point_type {
+                        SpecialPoint::LiftTop => {
+                            lifts.insert(
+                                *index,
+                                PartialLift {
+                                    lift_top: Some(*position),
+                                    lift_bottom: None,
+                                },
+                            );
+                        }
+                        SpecialPoint::LiftBottom => {
+                            lifts.insert(
+                                *index,
+                                PartialLift {
+                                    lift_top: None,
+                                    lift_bottom: Some(*position),
+                                },
+                            );
+                        }
+                        _ => error!("invalid point type: {:#?}", point_type),
+                    }
+                }
+            });
+
+        lifts
+            .iter()
+            .map(|(_index, lift)| {
+                Box::new(GoUpLift {
+                    lift_bottom: lift.lift_bottom.unwrap(),
+                    lift_top: lift.lift_top.unwrap(),
+                })
+            })
+            .filter(|lift| lift.lift_bottom == start)
+            .collect()
+    }
+}
+impl Decision for GoUpLift {
+    fn get_cost(
+        &self,
+        view: &GraphView<u32, SpecialPoint>,
+        start: GridCoord,
+    ) -> (DecisionResult, u32, Path) {
+        if self.lift_bottom != start {
+            error!("invalid state for go to lift bottom, start==end");
+        }
+        let path = dijkstra(&view, start, self.lift_top);
+
+        (DecisionResult::Goto(self.lift_top), path.cost(), path)
+    }
+    fn clone_box(&self) -> Box<dyn Decision> {
+        Box::new(self.clone())
+    }
+}
+#[derive(Debug, Clone)]
+pub struct GoToParkingLot {
+    position: GridCoord,
+}
+impl GoToParkingLot {
+    pub fn new(view: &GraphView<u32, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
+        view.special_points()
+            .iter()
+            .filter_map(|(point_type, position, _index)| match point_type {
+                SpecialPoint::ParkingLot => Some(Box::new(Self {
+                    position: *position,
+                })),
+                _ => None,
+            })
+            .collect()
+    }
+}
+impl Decision for GoToParkingLot {
+    fn get_cost(
+        &self,
+        view: &GraphView<u32, SpecialPoint>,
+        start: GridCoord,
+    ) -> (DecisionResult, u32, Path) {
+        let path = dijkstra(&view, start, self.position);
+        let cost = path.cost() + 10;
+        (DecisionResult::Despawn, cost, path)
     }
     fn clone_box(&self) -> Box<dyn Decision> {
         Box::new(self.clone())

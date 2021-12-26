@@ -122,10 +122,16 @@ impl<'a, T, S> GraphView<'a, T, S> {
             .flat_map(|l| l.get_children(coord))
             .collect()
     }
-    pub fn special_points(&self) -> Vec<(S, GridCoord)> {
+    pub fn special_points(&self) -> Vec<(S, GridCoord, usize)> {
         self.layers
             .iter()
-            .flat_map(|l| l.get_special_pooints())
+            .enumerate()
+            .flat_map(|(i, l)| {
+                l.get_special_pooints()
+                    .drain(..)
+                    .map(|(p, coord)| (p, coord, i))
+                    .collect::<Vec<(S, GridCoord, usize)>>()
+            })
             .collect()
     }
 }
