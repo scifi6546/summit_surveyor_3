@@ -3,19 +3,31 @@ mod decision;
 use bevy::prelude::*;
 use decision::{get_best_decision, DecisionResult};
 use slana::{GraphLayer, GraphView, GridCoord, Path};
-use std::cmp::max;
+use std::{cmp::max, f32};
 pub struct Skiier;
 #[derive(Debug, Clone, Copy)]
 pub struct SkiierData {
     despawn_at_end: bool,
     total_cost: u32,
+    /// prferred angle
+    prefered_slope: f32,
+    /// how much cost a skiier will endure before going home
+    stamina: u32,
 }
 impl SkiierData {
+    pub fn from_preferred_angle_stamina(angle: f32, stamina: u32) -> Self {
+        let mut s = Self::default();
+        s.prefered_slope = angle;
+        s.stamina = stamina;
+        s
+    }
     /// adds skiier to self
     pub fn add(&self, skiier: &SkiierData) -> Self {
         Self {
             despawn_at_end: self.despawn_at_end || skiier.despawn_at_end,
             total_cost: self.total_cost + skiier.total_cost,
+            prefered_slope: skiier.prefered_slope,
+            stamina: skiier.stamina,
         }
     }
 }
@@ -26,10 +38,13 @@ impl slana::WeightGetter<TerrainPoint, u32> for SkiierData {
                 let end_height = height;
                 match *start {
                     TerrainPoint::Ground { height } => {
-                        if end_height < height {
-                            max((end_height - height) as u32, 1)
+                        let slope = (end_height - height).atan();
+
+                        if slope < 0.0 {
+                            let weight = (slope - self.prefered_slope).abs() * 10.0;
+                            max(weight as u32, 1)
                         } else {
-                            max(((end_height - height) * 100.0) as u32, 1)
+                            max((slope * 100.0) as u32, 5)
                         }
                     }
                     TerrainPoint::LiftBottom { up_cost } => up_cost,
@@ -48,12 +63,14 @@ impl Default for SkiierData {
         Self {
             despawn_at_end: false,
             total_cost: 0,
+            stamina: 1000,
+            prefered_slope: std::f32::consts::PI / 4.0,
         }
     }
 }
 use super::{LiftLayer, ParkingLotLayer, SpecialPoint, Terrain, TerrainPoint};
 use std::cmp::min;
-const MAX_SKIIERS: usize = 1;
+const MAX_SKIIERS: usize = 10;
 pub struct PathT {
     time: f32,
 }
@@ -67,10 +84,7 @@ fn build_decision(
         decisions[0].get_cost(&view, skiier_data, start);
 
     let mut end = path.get_end();
-    let mut skiier = SkiierData {
-        despawn_at_end: false,
-        total_cost: cost,
-    };
+    let mut skiier = SkiierData::default();
     if result != DecisionResult::Despawn {
         for i in 1..decisions.len() {
             let (result, _, new_path, t_skiier) =
@@ -116,11 +130,24 @@ pub fn build_skiiers(
     let num_skiiers = skiier_query.iter().count();
     //   let view: GraphView<u32> = layers.into();
     let view = layers.into();
+    let angles: [f32; MAX_SKIIERS] = [
+        f32::consts::PI / 3.2,
+        f32::consts::FRAC_PI_3,
+        f32::consts::FRAC_PI_4,
+        f32::consts::PI / 5.0,
+        f32::consts::FRAC_PI_6,
+        f32::consts::PI / 7.0,
+        f32::consts::FRAC_PI_8,
+        f32::consts::PI / 9.0,
+        f32::consts::PI / 10.0,
+        f32::consts::PI / 11.0,
+    ];
+    let stamina: [u32; MAX_SKIIERS] = [1000, 2000, 3000, 2000, 1501, 1234, 12341, 1245, 9123, 112];
     for i in 0..MAX_SKIIERS - num_skiiers {
         let (skiier, path) = build_decision(
             &view,
             GridCoord::from_xy(i as i32 % 5, 0),
-            &SkiierData::default(),
+            &SkiierData::from_preferred_angle_stamina(angles[i], stamina[i]),
         );
         commands
             .spawn_bundle(PbrBundle {

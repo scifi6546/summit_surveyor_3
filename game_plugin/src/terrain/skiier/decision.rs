@@ -303,7 +303,7 @@ impl Decision for GoToParkingLot {
         start: GridCoord,
     ) -> (DecisionResult, u32, Path<u32>, SkiierData) {
         let path = dijkstra(&view, skiier, start, self.position);
-        if skiier.total_cost > 1000 {
+        if skiier.total_cost > skiier.stamina {
             let cost = path.cost() as f32 / (skiier.total_cost as f32 / 100.0);
             let cost = max(cost as u32, 100);
             (DecisionResult::Despawn, cost, path, *skiier)
