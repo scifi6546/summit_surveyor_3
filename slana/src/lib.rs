@@ -2,6 +2,7 @@ use std::{
     collections::{BinaryHeap, HashMap},
     marker::PhantomData,
 };
+pub mod importer;
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 pub struct GridCoord(i64);
 impl GridCoord {
@@ -22,6 +23,9 @@ impl std::fmt::Debug for GridCoord {
             .field("y", &y)
             .finish()
     }
+}
+pub trait WeightGetter<PointType, GraphWeight> {
+    fn get_weight(&self, start: PointType, end: PointType) -> GraphWeight;
 }
 pub trait GraphLayer<T> {
     /// type specifing special point
@@ -101,7 +105,6 @@ impl<T: std::clone::Clone + ToF32, S> Grid<T, S> {
             let diagonal = (f_x1y0 - f_x0y1) * x / 1.0 + f_x1y0;
             (diagonal - bottom_line) * y / (1.0 - x) + bottom_line
         } else {
-            let f_x0y0 = self.get(x_0, y_0).to_f32();
             let f_x0y1 = self.get(x_0, y_0 + 1).to_f32();
             let f_x1y0 = self.get(x_0 + 1, y_0).to_f32();
             let f_x1y1 = self.get(x_0 + 1, y_0 + 1).to_f32();
