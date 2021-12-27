@@ -31,6 +31,14 @@ impl Terrain {
             grid: Grid::from_val((size_x, size_y), 2),
         }
     }
+    pub fn from_pgm() -> Self {
+        Self {
+            grid: slana::importer::terrain_from_pgm(
+                include_str!("../../heightmaps/output.pgm").to_string(),
+            )
+            .expect("failed to parse"),
+        }
+    }
     pub fn slope(size_x: u32, size_y: u32) -> Self {
         Self {
             grid: Grid::from_fn((size_x, size_y), |x, y| x as u32 + 1),
@@ -106,7 +114,8 @@ fn build_terrain(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let terrain = Terrain::slope(100, 100);
+    // let terrain = Terrain::slope(100, 100);
+    let terrain = Terrain::from_pgm();
 
     //let terrain = Terrain::basic(100, 100);
 

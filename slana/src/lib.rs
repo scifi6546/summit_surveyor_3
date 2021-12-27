@@ -1,7 +1,9 @@
 use std::{
     collections::{BinaryHeap, HashMap},
     marker::PhantomData,
+    ops::*,
 };
+mod cost_impl;
 pub mod importer;
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 pub struct GridCoord(i64);
@@ -34,11 +36,30 @@ pub trait GraphLayer<T> {
     fn get_special_pooints(&self) -> Vec<(Self::SpecialPoint, GridCoord)>;
     fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, T)>;
 }
+
 pub struct Grid<T: std::clone::Clone, SpecialType> {
     special_marker: PhantomData<SpecialType>,
     data: Vec<T>,
     dim_x: usize,
     dim_y: usize,
+}
+impl<T: std::clone::Clone + PartialEq, S> PartialEq for Grid<T, S> {
+    fn eq(&self, other: &Grid<T, S>) -> bool {
+        self.data == other.data && self.dim_x == other.dim_x && self.dim_y == other.dim_y
+    }
+    fn ne(&self, other: &Grid<T, S>) -> bool {
+        !self.eq(other)
+    }
+}
+impl<T: std::clone::Clone + std::fmt::Debug, S> std::fmt::Debug for Grid<T, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_struct("Grid")
+            .field("special_marker", &self.special_marker)
+            .field("data", &self.data)
+            .field("dim_x", &self.dim_x)
+            .field("dim_y", &self.dim_y)
+            .finish()
+    }
 }
 impl<T: std::clone::Clone, S> Grid<T, S> {
     /// Creates grid based off of initial value
@@ -143,13 +164,13 @@ impl<T: std::clone::Clone, S> GraphLayer<T> for Grid<T, S> {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Path {
-    pub total_cost: u32,
+pub struct Path<T: Cost> {
+    pub total_cost: T,
     pub points: Vec<GridCoord>,
 }
-impl Path {
-    pub fn cost(&self) -> u32 {
-        self.total_cost
+impl<T: Cost> Path<T> {
+    pub fn cost(&self) -> T {
+        self.total_cost.clone()
     }
     pub fn get_end(&self) -> GridCoord {
         self.points[self.points.len() - 1]
@@ -193,13 +214,13 @@ impl<'a, T, S> GraphView<'a, T, S> {
             .collect()
     }
 }
-#[derive(PartialEq, Eq)]
-pub struct State {
-    cost: u32,
+#[derive(PartialEq, Eq, Clone)]
+pub struct State<T: Cost> {
+    cost: T,
     position: GridCoord,
     previous: Option<GridCoord>,
 }
-impl std::cmp::Ord for State {
+impl<T: Cost> std::cmp::Ord for State<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         other
             .cost
@@ -207,18 +228,24 @@ impl std::cmp::Ord for State {
             .then_with(|| self.position.cmp(&other.position))
     }
 }
-impl std::cmp::PartialOrd for State {
+impl<T: Cost> std::cmp::PartialOrd for State<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
+pub trait Cost: Sized + Add + PartialEq + Ord + AddAssign + Clone {
+    /// get zero value
+    fn zero() -> Self;
+    /// get max value
+    fn max_val() -> Self;
+}
 /// Gets lowest cost path from start to end
-pub fn dijkstra<S>(graph: &GraphView<u32, S>, start: GridCoord, end: GridCoord) -> Path {
-    let mut dist: HashMap<GridCoord, (u32, Option<GridCoord>)> = HashMap::new();
-    dist.insert(start, (0u32, None));
+pub fn dijkstra<T: Cost, S>(graph: &GraphView<T, S>, start: GridCoord, end: GridCoord) -> Path<T> {
+    let mut dist: HashMap<GridCoord, (T, Option<GridCoord>)> = HashMap::new();
+    dist.insert(start, (T::zero(), None));
     let mut heap = BinaryHeap::new();
     heap.push(State {
-        cost: 0,
+        cost: T::zero(),
         position: start,
         previous: None,
     });
@@ -249,19 +276,21 @@ pub fn dijkstra<S>(graph: &GraphView<u32, S>, start: GridCoord, end: GridCoord) 
             };
         }
         for (child_position, child_cost) in graph.get_children(position).iter() {
+            let mut cost: T = cost.clone();
+            cost += child_cost.clone();
             let next = State {
-                cost: cost + *child_cost,
+                cost,
                 position: *child_position,
                 previous: Some(position),
             };
             let old_cost = if let Some((c, _)) = dist.get(child_position) {
-                *c
+                c.clone()
             } else {
-                u32::MAX
+                T::max_val()
             };
             if next.cost < old_cost {
-                dist.insert(*child_position, (next.cost, Some(position)));
-                heap.push(next);
+                dist.insert(*child_position, (next.cost.clone(), Some(position)));
+                heap.push(next.clone());
             }
         }
     }

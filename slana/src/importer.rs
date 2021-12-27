@@ -91,11 +91,6 @@ pub fn terrain_from_pgm<S>(data: String) -> Result<Grid<u32, S>, ParseError> {
         dim_y,
         special_marker: PhantomData,
     })
-    /*
-    Ok(Terrain::from_tiles(
-        tiles,
-        Vector2::new(x_dimensions, y_dimensions),
-    ))*/
 }
 ///Iterator over whitespace skips comments and whitespace characters
 struct SkipWhitespace<'a> {
@@ -174,9 +169,9 @@ impl<'a> Iterator for SkipWhitespace<'a> {
 }
 #[cfg(test)]
 mod test {
-    use super::super::{Terrain, Tile, TileType};
+
     use super::*;
-    use nalgebra::Vector2;
+
     #[test]
     fn test_iterator() {
         let s = "s\ns2\n s3\n#do not read\ns4";
@@ -213,29 +208,20 @@ mod test {
 
     #[test]
     fn basic_terrain() {
-        let terrain = terrain_from_pgm(
+        let terrain: Grid<u32, u8> = terrain_from_pgm(
             "P2
     1 1
     10000
     10000
             "
             .to_string(),
-            TileType::Snow,
-        );
-        assert_eq!(
-            terrain,
-            Ok(Terrain::from_tiles(
-                vec![Tile {
-                    height: 10_000.0,
-                    tile_type: TileType::Snow
-                }],
-                Vector2::new(1, 1)
-            ))
-        );
+        )
+        .expect("failed to parse");
+        assert_eq!(terrain, Grid::from_val((1, 1), 10_000));
     }
     #[test]
     fn comment() {
-        let terrain = terrain_from_pgm(
+        let terrain: Grid<u32, u8> = terrain_from_pgm(
             "P2
     1 1
     #hello!
@@ -243,17 +229,8 @@ mod test {
     10000
             "
             .to_string(),
-            TileType::Snow,
-        );
-        assert_eq!(
-            terrain,
-            Ok(Terrain::from_tiles(
-                vec![Tile {
-                    height: 10_000.0,
-                    tile_type: TileType::Snow
-                }],
-                Vector2::new(1, 1)
-            ))
-        );
+        )
+        .expect("failed to parse");
+        assert_eq!(terrain, Grid::from_val((1, 1), 10_000));
     }
 }
