@@ -1466,6 +1466,7 @@ dependencies = [
  "rand",
  "slana",
  "smooth-bevy-cameras",
+ "winit",
 ]
 
 [[package]]

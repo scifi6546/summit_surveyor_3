@@ -9,7 +9,7 @@ pub struct SkiierData {
     despawn_at_end: bool,
     total_cost: u32,
 }
-use super::{LiftLayer, SpecialPoint, Terrain};
+use super::{LiftLayer, ParkingLotLayer, SpecialPoint, Terrain};
 use std::cmp::min;
 const MAX_SKIIERS: usize = 1;
 pub struct PathT {
@@ -50,12 +50,18 @@ pub fn build_skiiers(
     skiier_query: Query<(), With<Skiier>>,
     terrain: Query<&Terrain, ()>,
     lift_query: Query<&LiftLayer, ()>,
+    parkinglot_query: Query<&ParkingLotLayer, ()>,
 ) {
     let layers: Vec<&dyn GraphLayer<u32, SpecialPoint = SpecialPoint>> = terrain
         .iter()
         .map(|terrain| &terrain.grid as &dyn GraphLayer<u32, SpecialPoint = SpecialPoint>)
         .chain(
             lift_query
+                .iter()
+                .map(|l| l as &dyn GraphLayer<u32, SpecialPoint = SpecialPoint>),
+        )
+        .chain(
+            parkinglot_query
                 .iter()
                 .map(|l| l as &dyn GraphLayer<u32, SpecialPoint = SpecialPoint>),
         )
@@ -104,6 +110,7 @@ pub fn skiier_path_follow(
         )
         .collect();
     let view = layers.into();
+    let terrain = terrain.iter().next().unwrap();
     for (entity, mut path, mut path_time, mut transform, mut skiier_data) in skiiers.iter_mut() {
         if path.points.len() == 0 {
             continue;
@@ -115,10 +122,13 @@ pub fn skiier_path_follow(
             if idx < path.points.len() - 1 {
                 let (x_next, y_next) = path.points[idx + 1].to_xy();
                 let delta_time = path_time.time - idx as f32;
-                transform.translation.x =
-                    x_next as f32 * delta_time + (1.0 - delta_time) * x as f32;
-                transform.translation.z =
-                    y_next as f32 * delta_time + (1.0 - delta_time) * y as f32;
+                let x_f = x_next as f32 * delta_time + (1.0 - delta_time) * x as f32;
+                let z_f = y_next as f32 * delta_time + (1.0 - delta_time) * y as f32;
+                let y_f = terrain.grid.interpolate(x_f, z_f);
+                transform.translation.x = x_f;
+                transform.translation.y = y_f;
+                transform.translation.z = z_f;
+                info!("y_f: {}", y_f);
             } else {
                 transform.translation.x = x as f32;
                 transform.translation.z = y as f32;

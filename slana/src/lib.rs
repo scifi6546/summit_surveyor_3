@@ -46,6 +46,21 @@ impl<T: std::clone::Clone, S> Grid<T, S> {
             dim_y: size.1 as usize,
         }
     }
+    pub fn from_fn<F: Fn(i32, i32) -> T>(size: (u32, u32), ctor: F) -> Self {
+        let mut data = vec![];
+        data.reserve(size.0 as usize * size.1 as usize);
+        for x in 0..size.0 {
+            for y in 0..size.1 {
+                data.push(ctor(x as i32, y as i32));
+            }
+        }
+        Self {
+            special_marker: PhantomData,
+            data,
+            dim_x: size.0 as usize,
+            dim_y: size.1 as usize,
+        }
+    }
     /// Returns dimensions of grid
     pub fn size(&self) -> (usize, usize) {
         (self.dim_x, self.dim_y)
@@ -56,6 +71,45 @@ impl<T: std::clone::Clone, S> Grid<T, S> {
     /// Gets index in array
     fn get_dim(&self, x: usize, y: usize) -> usize {
         x * self.dim_y + y
+    }
+}
+pub trait ToF32 {
+    fn to_f32(&self) -> f32;
+}
+
+impl ToF32 for u32 {
+    fn to_f32(&self) -> f32 {
+        *self as f32
+    }
+}
+impl<T: std::clone::Clone + ToF32, S> Grid<T, S> {
+    /// Interpolate to floating point value
+    /// link https://en.wikipedia.org/wiki/Bilinear_interpolation
+    pub fn interpolate(&self, x: f32, y: f32) -> f32 {
+        let x_0 = x.floor() as i32;
+        let y_0 = y.floor() as i32;
+        let x = x - x.floor();
+        let y = y - y.floor();
+        if y < -1.0 * x + 1.0 {
+            // in bottom triangle
+
+            let f_x0y0 = self.get(x_0, y_0).to_f32();
+            let f_x0y1 = self.get(x_0, y_0 + 1).to_f32();
+            let f_x1y0 = self.get(x_0 + 1, y_0).to_f32();
+
+            let bottom_line = (f_x1y0 - f_x0y0) * x / (1.0) + f_x0y0;
+            let diagonal = (f_x1y0 - f_x0y1) * x / 1.0 + f_x1y0;
+            (diagonal - bottom_line) * y / (1.0 - x) + bottom_line
+        } else {
+            let f_x0y0 = self.get(x_0, y_0).to_f32();
+            let f_x0y1 = self.get(x_0, y_0 + 1).to_f32();
+            let f_x1y0 = self.get(x_0 + 1, y_0).to_f32();
+            let f_x1y1 = self.get(x_0 + 1, y_0 + 1).to_f32();
+
+            let diagonal = (f_x1y0 - f_x0y1) * x / 1.0 + f_x1y0;
+            let top_line = (f_x1y1 - f_x0y1) * x / 1.0 + f_x0y1;
+            (top_line - diagonal) * y / x + diagonal
+        }
     }
 }
 impl<T: std::clone::Clone, S> GraphLayer<T> for Grid<T, S> {
@@ -84,6 +138,7 @@ impl<T: std::clone::Clone, S> GraphLayer<T> for Grid<T, S> {
         return out;
     }
 }
+
 #[derive(PartialEq, Debug)]
 pub struct Path {
     pub total_cost: u32,

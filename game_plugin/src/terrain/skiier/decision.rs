@@ -1,8 +1,8 @@
 use super::SpecialPoint;
 use bevy::prelude::*;
-use slana::{dijkstra, GraphLayer, GraphView, GridCoord, Path};
+use slana::{dijkstra, GraphView, GridCoord, Path};
 use std::{
-    cmp::{max, Reverse},
+    cmp::{max, min, Reverse},
     collections::{BinaryHeap, HashMap},
 };
 #[derive(Debug, PartialEq, Eq)]
@@ -49,9 +49,6 @@ impl std::cmp::PartialEq for DecisionNode {
 #[derive(Debug)]
 struct DecisionItem {
     decision: Box<dyn Decision>,
-    cost: u32,
-    path: Path,
-    search_depth: u32,
     /// refrence to previous decision
     previous_decision: Option<usize>,
 }
@@ -71,10 +68,7 @@ pub fn get_best_decision(
         cost += base_cost;
         decision_vec.push(DecisionItem {
             decision,
-            path,
-            cost,
             previous_decision: None,
-            search_depth: 0,
         });
         priority.push(Reverse(DecisionNode {
             decision: i,
@@ -109,9 +103,6 @@ pub fn get_best_decision(
                 let index = decision_vec.len();
                 decision_vec.push(DecisionItem {
                     decision,
-                    path,
-                    cost,
-                    search_depth: decision_node.search_depth + 1,
                     previous_decision: Some(decision_node.decision),
                 });
                 priority.push(Reverse(DecisionNode {
@@ -174,7 +165,7 @@ impl Decision for GoToLiftBottom {
             error!("invalid state for go to lift bottom, start==end");
         }
         let path = dijkstra(&view, start, self.lift_bottom);
-        let cost = max(path.cost(), 1);
+        let cost = max(path.cost(), 100);
         (DecisionResult::Goto(self.lift_bottom), cost, path)
     }
     fn clone_box(&self) -> Box<dyn Decision> {
@@ -195,7 +186,7 @@ impl GoUpLift {
         let mut lifts: HashMap<usize, PartialLift> = HashMap::new();
         view.special_points()
             .iter()
-            .filter(|(point_type, position, _index)| match point_type {
+            .filter(|(point_type, _position, _index)| match point_type {
                 SpecialPoint::LiftTop => true,
                 SpecialPoint::LiftBottom => true,
                 _ => false,
@@ -255,7 +246,11 @@ impl Decision for GoUpLift {
         }
         let path = dijkstra(&view, start, self.lift_top);
 
-        (DecisionResult::Goto(self.lift_top), path.cost(), path)
+        (
+            DecisionResult::Goto(self.lift_top),
+            max(path.cost(), 100),
+            path,
+        )
     }
     fn clone_box(&self) -> Box<dyn Decision> {
         Box::new(self.clone())
@@ -266,7 +261,7 @@ pub struct GoToParkingLot {
     position: GridCoord,
 }
 impl GoToParkingLot {
-    pub fn new(view: &GraphView<u32, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
+    pub fn new(view: &GraphView<u32, SpecialPoint>, _start: GridCoord) -> Vec<Box<Self>> {
         view.special_points()
             .iter()
             .filter_map(|(point_type, position, _index)| match point_type {
@@ -285,10 +280,43 @@ impl Decision for GoToParkingLot {
         start: GridCoord,
     ) -> (DecisionResult, u32, Path) {
         let path = dijkstra(&view, start, self.position);
-        let cost = path.cost() + 10;
+        let cost = min(path.cost(), 1);
         (DecisionResult::Despawn, cost, path)
     }
     fn clone_box(&self) -> Box<dyn Decision> {
         Box::new(self.clone())
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn ordering() {
+        let n1 = DecisionNode {
+            decision: 0,
+            end: GridCoord::from_xy(0, 0),
+            total_cost: 1,
+            search_depth: 0,
+            result: DecisionResult::Goto(GridCoord::from_xy(1, 1)),
+        };
+        let n2 = DecisionNode {
+            decision: 0,
+            end: GridCoord::from_xy(0, 0),
+            total_cost: 2,
+            search_depth: 0,
+            result: DecisionResult::Goto(GridCoord::from_xy(1, 1)),
+        };
+        assert!(n2 > n1);
+        assert!(n2 >= n1);
+        assert!(n1 < n2);
+        assert!(n1 <= n2);
+        let new_n1 = DecisionNode {
+            decision: 0,
+            end: GridCoord::from_xy(0, 0),
+            total_cost: 1,
+            search_depth: 0,
+            result: DecisionResult::Goto(GridCoord::from_xy(1, 1)),
+        };
+        assert!(n1 == new_n1)
     }
 }

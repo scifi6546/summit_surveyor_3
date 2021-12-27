@@ -1,5 +1,3 @@
-use crate::actions::Actions;
-use crate::loading::TextureAssets;
 use crate::GameState;
 use bevy::prelude::*;
 use smooth_bevy_cameras::{
@@ -37,7 +35,6 @@ fn spawn_camera(mut commands: Commands) {
 
 fn spawn_player(
     mut commands: Commands,
-    textures: Res<TextureAssets>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {

@@ -4,7 +4,7 @@ use bevy::{
     prelude::*,
     render::{mesh::Indices, pipeline::PrimitiveTopology},
 };
-use layers::{build_lift, build_parkinglot, LiftLayer, SpecialPoint};
+use layers::{build_lift, build_parkinglot, LiftLayer, ParkingLotLayer, SpecialPoint};
 use nalgebra::Vector3;
 use slana::Grid;
 mod skiier;
@@ -23,12 +23,17 @@ impl Plugin for TerrainPlugin {
     }
 }
 pub struct Terrain {
-    grid: Grid<u32, SpecialPoint>,
+    pub grid: Grid<u32, SpecialPoint>,
 }
 impl Terrain {
     pub fn basic(size_x: u32, size_y: u32) -> Self {
         Self {
             grid: Grid::from_val((size_x, size_y), 2),
+        }
+    }
+    pub fn slope(size_x: u32, size_y: u32) -> Self {
+        Self {
+            grid: Grid::from_fn((size_x, size_y), |x, y| x as u32 + 1),
         }
     }
     fn build_mesh(&self) -> Mesh {
@@ -101,20 +106,67 @@ fn build_terrain(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let terrain = Terrain::basic(100, 100);
+    let terrain = Terrain::slope(100, 100);
+
+    //let terrain = Terrain::basic(100, 100);
+
+    build_lift(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &terrain,
+        40,
+        5,
+        0,
+        20,
+    );
+    build_lift(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &terrain,
+        20,
+        3,
+        30,
+        2,
+    );
+    build_lift(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &terrain,
+        10,
+        30,
+        22,
+        44,
+    );
+    build_lift(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &terrain,
+        80,
+        40,
+        78,
+        20,
+    );
+    build_lift(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &terrain,
+        12,
+        78,
+        20,
+        23,
+    );
+    build_parkinglot(&mut commands, &mut meshes, &mut materials, &terrain, 0, 1);
     let mesh = terrain.build_mesh();
     commands
         .spawn_bundle(PbrBundle {
             mesh: meshes.add(mesh),
-            material: materials.add(Color::rgb(0.1, 0.5, 0.2).into()),
+            material: materials.add(Color::rgb(0.8, 0.8, 0.8).into()),
             ..Default::default()
         })
-        .insert(Terrain::basic(100, 100));
-
-    build_lift(&mut commands, &mut meshes, &mut materials, 5, 5, 0, 0);
-    build_lift(&mut commands, &mut meshes, &mut materials, 8, 3, 1, 2);
-    build_lift(&mut commands, &mut meshes, &mut materials, 10, 2, 22, 44);
-    build_lift(&mut commands, &mut meshes, &mut materials, 80, 40, 78, 20);
-    build_lift(&mut commands, &mut meshes, &mut materials, 12, 78, 20, 23);
-    build_parkinglot(&mut commands, &mut meshes, &mut materials, 20, 20);
+        .insert(terrain);
 }
