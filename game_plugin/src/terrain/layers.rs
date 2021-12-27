@@ -1,4 +1,4 @@
-use super::Terrain;
+use super::{Terrain, TerrainPoint};
 use bevy::prelude::*;
 use slana::{GraphLayer, GridCoord};
 #[derive(Debug)]
@@ -14,7 +14,7 @@ pub struct LiftLayer {
     up_cost: u32,
 }
 
-impl GraphLayer<u32> for LiftLayer {
+impl GraphLayer<TerrainPoint> for LiftLayer {
     type SpecialPoint = SpecialPoint;
     fn get_special_pooints(&self) -> Vec<(Self::SpecialPoint, GridCoord)> {
         vec![
@@ -22,11 +22,29 @@ impl GraphLayer<u32> for LiftLayer {
             (SpecialPoint::LiftBottom, self.bottom),
         ]
     }
-    fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, u32)> {
+    fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, TerrainPoint)> {
         if coord == self.bottom {
-            vec![(self.top, self.up_cost)]
+            vec![(
+                self.top,
+                TerrainPoint::LiftTop {
+                    up_cost: self.up_cost,
+                },
+            )]
         } else {
             vec![]
+        }
+    }
+    fn get_node(&self, coord: GridCoord) -> Option<TerrainPoint> {
+        if coord != self.bottom && coord != self.top {
+            None
+        } else if coord == self.bottom {
+            Some(TerrainPoint::LiftBottom {
+                up_cost: self.up_cost,
+            })
+        } else {
+            Some(TerrainPoint::LiftTop {
+                up_cost: self.up_cost,
+            })
         }
     }
 }
@@ -35,10 +53,10 @@ pub fn build_lift(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     terrain: &Terrain,
-    top_x: i32,
-    top_y: i32,
     bottom_x: i32,
     bottom_y: i32,
+    top_x: i32,
+    top_y: i32,
 ) {
     commands
         .spawn_bundle(PbrBundle {
@@ -46,7 +64,10 @@ pub fn build_lift(
             material: materials.add(Color::rgb(0.1, 0.5, 0.2).into()),
             transform: Transform::from_xyz(
                 bottom_x as f32,
-                *terrain.grid.get(bottom_x, bottom_y) as f32,
+                match terrain.grid.get(bottom_x, bottom_y) {
+                    TerrainPoint::Ground { height } => *height,
+                    _ => panic!("invalid point type"),
+                },
                 bottom_y as f32,
             ),
             ..Default::default()
@@ -58,10 +79,13 @@ pub fn build_lift(
         });
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.2).into()),
+        material: materials.add(Color::rgb(0.1, 0.2, 0.8).into()),
         transform: Transform::from_xyz(
             top_x as f32,
-            *terrain.grid.get(top_x, top_y) as f32,
+            match terrain.grid.get(top_x, top_y) {
+                TerrainPoint::Ground { height } => *height,
+                _ => panic!("invalid point type"),
+            },
             top_y as f32,
         ),
         ..Default::default()
@@ -71,13 +95,20 @@ pub fn build_lift(
 pub struct ParkingLotLayer {
     position: GridCoord,
 }
-impl GraphLayer<u32> for ParkingLotLayer {
+impl GraphLayer<TerrainPoint> for ParkingLotLayer {
     type SpecialPoint = SpecialPoint;
     fn get_special_pooints(&self) -> Vec<(Self::SpecialPoint, GridCoord)> {
         vec![(SpecialPoint::ParkingLot, self.position)]
     }
-    fn get_children(&self, _coord: GridCoord) -> Vec<(GridCoord, u32)> {
+    fn get_children(&self, _coord: GridCoord) -> Vec<(GridCoord, TerrainPoint)> {
         vec![]
+    }
+    fn get_node(&self, coord: GridCoord) -> Option<TerrainPoint> {
+        if coord != self.position {
+            None
+        } else {
+            Some(TerrainPoint::ParkingLot)
+        }
     }
 }
 pub fn build_parkinglot(
@@ -92,7 +123,14 @@ pub fn build_parkinglot(
         .spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
             material: materials.add(Color::rgb(0.15, 0.1, 0.1).into()),
-            transform: Transform::from_xyz(x as f32, *terrain.grid.get(x, y) as f32, y as f32),
+            transform: Transform::from_xyz(
+                x as f32,
+                match terrain.grid.get(x, y) {
+                    TerrainPoint::Ground { height } => *height,
+                    _ => panic!("invalid point type"),
+                },
+                y as f32,
+            ),
             ..Default::default()
         })
         .insert(ParkingLotLayer {

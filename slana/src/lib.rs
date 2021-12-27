@@ -141,6 +141,14 @@ impl<T: std::clone::Clone + ToF32, S> Grid<T, S> {
             (top_line - diagonal) * y / x + diagonal
         }
     }
+    pub fn convert<O: std::clone::Clone, F: Fn(T) -> O>(&self, converter: F) -> Grid<O, S> {
+        Grid {
+            special_marker: PhantomData,
+            data: self.data.iter().cloned().map(|d| converter(d)).collect(),
+            dim_x: self.dim_x,
+            dim_y: self.dim_y,
+        }
+    }
 }
 impl<T: std::clone::Clone, S> GraphLayer<T> for Grid<T, S> {
     type SpecialPoint = S;
@@ -235,14 +243,14 @@ impl<'a, T, S> GraphView<'a, T, S> {
             .collect()
     }
 }
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Clone)]
 pub struct State<P, C: Cost> {
     cost: C,
     original_point: P,
     position: GridCoord,
     previous: Option<GridCoord>,
 }
-impl<T: PartialOrd + Eq, C: Cost> std::cmp::Ord for State<T, C> {
+impl<T, C: Cost> std::cmp::Ord for State<T, C> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         other
             .cost
@@ -250,11 +258,20 @@ impl<T: PartialOrd + Eq, C: Cost> std::cmp::Ord for State<T, C> {
             .then_with(|| self.position.cmp(&other.position))
     }
 }
-impl<T: PartialOrd + Eq, C: Cost> std::cmp::PartialOrd for State<T, C> {
+impl<T, C: Cost> std::cmp::PartialOrd for State<T, C> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
+impl<P, C: Cost> Eq for State<P, C> {}
+impl<P, C: Cost> PartialEq for State<P, C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.cost == other.cost
+            && self.position == other.position
+            && self.previous == other.previous
+    }
+}
+
 pub trait Cost: Sized + Add + PartialEq + Ord + AddAssign + Clone {
     /// get zero value
     fn zero() -> Self;
@@ -265,7 +282,7 @@ pub trait WeightGetter<PointType, GraphWeight: Cost> {
     fn get_weight(&self, start: &PointType, end: &PointType) -> GraphWeight;
 }
 /// Gets lowest cost path from start to end
-pub fn dijkstra<T: PartialOrd + Eq + Clone, C: Cost, Getter: WeightGetter<T, C>, S>(
+pub fn dijkstra<T: Clone, C: Cost, Getter: WeightGetter<T, C>, S>(
     graph: &GraphView<T, S>,
     getter: &Getter,
     start: GridCoord,
@@ -408,5 +425,11 @@ mod tests {
                 points: vec![GridCoord::from_xy(1, 0), GridCoord::from_xy(2, 0)]
             }
         );
+    }
+    #[test]
+    fn convert() {
+        let grid: Grid<u32, u32> = Grid::from_val((100, 100), 1u32);
+        let g2 = grid.convert(|v| v as u64);
+        assert_eq!(g2, Grid::from_val((100, 100), 1u64))
     }
 }

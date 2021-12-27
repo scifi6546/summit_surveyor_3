@@ -22,26 +22,50 @@ impl Plugin for TerrainPlugin {
         );
     }
 }
+#[derive(Debug, Clone, PartialEq)]
+pub enum TerrainPoint {
+    Ground { height: f32 },
+    LiftBottom { up_cost: u32 },
+    LiftTop { up_cost: u32 },
+    ParkingLot,
+}
+impl slana::ToF32 for TerrainPoint {
+    fn to_f32(&self) -> f32 {
+        match *self {
+            Self::Ground { height } => height,
+            _ => panic!("invalid point type: {:#?}", self),
+        }
+    }
+}
 pub struct Terrain {
-    pub grid: Grid<u32, SpecialPoint>,
+    pub grid: Grid<TerrainPoint, SpecialPoint>,
 }
 impl Terrain {
     pub fn basic(size_x: u32, size_y: u32) -> Self {
         Self {
-            grid: Grid::from_val((size_x, size_y), 2),
+            grid: Grid::from_val((size_x, size_y), TerrainPoint::Ground { height: 2.0 }),
         }
     }
-    pub fn from_pgm() -> Self {
+    fn output() -> Self {
+        Self::from_pgm(include_str!("../../heightmaps/output.pgm").to_string())
+    }
+    fn cone() -> Self {
+        Self::from_pgm(include_str!("../../heightmaps/cone.pgm").to_string())
+    }
+    pub fn from_pgm(string: String) -> Self {
         Self {
-            grid: slana::importer::terrain_from_pgm(
-                include_str!("../../heightmaps/output.pgm").to_string(),
-            )
-            .expect("failed to parse"),
+            grid: slana::importer::terrain_from_pgm(string)
+                .expect("failed to parse")
+                .convert(|u| TerrainPoint::Ground {
+                    height: u as f32 / 1000.0,
+                }),
         }
     }
     pub fn slope(size_x: u32, size_y: u32) -> Self {
         Self {
-            grid: Grid::from_fn((size_x, size_y), |x, y| x as u32 + 1),
+            grid: Grid::from_fn((size_x, size_y), |x, y| TerrainPoint::Ground {
+                height: x as f32 + 1.0,
+            }),
         }
     }
     fn build_mesh(&self) -> Mesh {
@@ -53,22 +77,34 @@ impl Terrain {
             for y in 0..self.grid.size().1 - 1 {
                 let x0_y0 = Vector3::new(
                     x as f32,
-                    *self.grid.get(x as i32, y as i32) as f32,
+                    match self.grid.get(x as i32, y as i32) {
+                        TerrainPoint::Ground { height } => *height,
+                        _ => panic!("invalid point type"),
+                    },
                     y as f32,
                 );
                 let x0_y1 = Vector3::new(
                     x as f32,
-                    *self.grid.get(x as i32, y as i32 + 1) as f32,
+                    match self.grid.get(x as i32, y as i32 + 1) {
+                        TerrainPoint::Ground { height } => *height,
+                        _ => panic!("invalid point type"),
+                    },
                     y as f32 + 1.0,
                 );
                 let x1_y0 = Vector3::new(
                     x as f32 + 1.0,
-                    *self.grid.get(x as i32 + 1, y as i32) as f32,
+                    match self.grid.get(x as i32 + 1, y as i32) {
+                        TerrainPoint::Ground { height } => *height,
+                        _ => panic!("invalid point type"),
+                    },
                     y as f32,
                 );
                 let x1_y1 = Vector3::new(
                     x as f32 + 1.0,
-                    *self.grid.get(x as i32 + 1, y as i32 + 1) as f32,
+                    match self.grid.get(x as i32 + 1, y as i32 + 1) {
+                        TerrainPoint::Ground { height } => *height,
+                        _ => panic!("invalid point type"),
+                    },
                     y as f32 + 1.0,
                 );
                 let triangle0_normal = (x0_y1 - x0_y0).cross(&(x1_y0 - x0_y0)).normalize();
@@ -115,8 +151,8 @@ fn build_terrain(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // let terrain = Terrain::slope(100, 100);
-    let terrain = Terrain::from_pgm();
-
+    //  let terrain = Terrain::output();
+    let terrain = Terrain::cone();
     //let terrain = Terrain::basic(100, 100);
 
     build_lift(
@@ -124,52 +160,22 @@ fn build_terrain(
         &mut meshes,
         &mut materials,
         &terrain,
+        50,
         40,
-        5,
-        0,
-        20,
+        60,
+        60,
     );
     build_lift(
         &mut commands,
         &mut meshes,
         &mut materials,
         &terrain,
-        20,
-        3,
-        30,
-        2,
+        1,
+        1,
+        50,
+        50,
     );
-    build_lift(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        &terrain,
-        10,
-        30,
-        22,
-        44,
-    );
-    build_lift(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        &terrain,
-        80,
-        40,
-        78,
-        20,
-    );
-    build_lift(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        &terrain,
-        12,
-        78,
-        20,
-        23,
-    );
-    build_parkinglot(&mut commands, &mut meshes, &mut materials, &terrain, 0, 1);
+    build_parkinglot(&mut commands, &mut meshes, &mut materials, &terrain, 10, 10);
     let mesh = terrain.build_mesh();
     commands
         .spawn_bundle(PbrBundle {

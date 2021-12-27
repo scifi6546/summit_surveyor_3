@@ -1,8 +1,8 @@
-use super::SpecialPoint;
+use super::{SkiierData, SpecialPoint, TerrainPoint};
 use bevy::prelude::*;
 use slana::{dijkstra, GraphView, GridCoord, Path};
 use std::{
-    cmp::{max, min, Reverse},
+    cmp::{max, Reverse},
     collections::{BinaryHeap, HashMap},
 };
 #[derive(Debug, PartialEq, Eq)]
@@ -13,11 +13,26 @@ pub enum DecisionResult {
     Despawn,
 }
 pub trait Decision: std::fmt::Debug {
+    fn cost_function(
+        &self,
+        view: &GraphView<TerrainPoint, SpecialPoint>,
+        skiier_data: &SkiierData,
+        start: GridCoord,
+    ) -> (DecisionResult, u32, Path<u32>, SkiierData);
     fn get_cost(
         &self,
-        view: &GraphView<u32, SpecialPoint>,
+        view: &GraphView<TerrainPoint, SpecialPoint>,
+        skiier_data: &SkiierData,
         start: GridCoord,
-    ) -> (DecisionResult, u32, Path<u32>);
+    ) -> (DecisionResult, u32, Path<u32>, SkiierData) {
+        let (result, cost, path, mut skiier) = self.cost_function(view, skiier_data, start);
+        skiier.total_cost += cost;
+        let mut skiier = skiier_data.add(&skiier);
+        if result == DecisionResult::Despawn {
+            skiier.despawn_at_end = true;
+        }
+        (result, cost, path, skiier)
+    }
     fn clone_box(&self) -> Box<dyn Decision>;
 }
 #[derive(Debug)]
@@ -49,25 +64,27 @@ impl std::cmp::PartialEq for DecisionNode {
 #[derive(Debug)]
 struct DecisionItem {
     decision: Box<dyn Decision>,
+    skiier: SkiierData,
     /// refrence to previous decision
     previous_decision: Option<usize>,
 }
 const SEARCH_DEPTH: u32 = 3;
 
 pub fn get_best_decision(
-    view: &GraphView<u32, SpecialPoint>,
+    view: &GraphView<TerrainPoint, SpecialPoint>,
+    skiier: &SkiierData,
     start: GridCoord,
-    base_cost: u32,
-) -> Vec<Box<dyn Decision>> {
+) -> (Vec<Box<dyn Decision>>, SkiierData) {
     let mut priority = BinaryHeap::new();
     let mut decision_vec = vec![];
     let mut decisions = get_decisions(view, start);
     for (i, decision) in decisions.drain(..).enumerate() {
-        let (result, mut cost, path) = decision.get_cost(view, start);
+        let (result, mut cost, path, skiier) = decision.get_cost(view, skiier, start);
         let end = path.get_end();
-        cost += base_cost;
+        cost += skiier.total_cost;
         decision_vec.push(DecisionItem {
             decision,
+            skiier,
             previous_decision: None,
         });
         priority.push(Reverse(DecisionNode {
@@ -91,18 +108,20 @@ pub fn get_best_decision(
                 if let Some(idx) = decision_vec[current_idx].previous_decision {
                     current_idx = idx;
                 } else {
-                    out.reverse();
-                    return out;
+                    return (out, decision_vec[decision_node.decision].skiier);
                 }
             }
         } else {
+            let current_skiier = decision_vec[decision_node.decision].skiier;
             let mut decisions = get_decisions(view, decision_node.end);
             for decision in decisions.drain(..) {
-                let (result, cost, path) = decision.get_cost(view, decision_node.end);
+                let (result, cost, path, _skiier) =
+                    decision.get_cost(view, &current_skiier, decision_node.end);
                 let end = path.get_end();
                 let index = decision_vec.len();
                 decision_vec.push(DecisionItem {
                     decision,
+                    skiier: skiier.clone(),
                     previous_decision: Some(decision_node.decision),
                 });
                 priority.push(Reverse(DecisionNode {
@@ -119,7 +138,7 @@ pub fn get_best_decision(
 }
 
 pub fn get_decisions(
-    view: &GraphView<u32, SpecialPoint>,
+    view: &GraphView<TerrainPoint, SpecialPoint>,
     position: GridCoord,
 ) -> Vec<Box<dyn Decision>> {
     GoToLiftBottom::new(view, position)
@@ -142,7 +161,7 @@ pub struct GoToLiftBottom {
     lift_bottom: GridCoord,
 }
 impl GoToLiftBottom {
-    pub fn new(view: &GraphView<u32, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
+    pub fn new(view: &GraphView<TerrainPoint, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
         view.special_points()
             .iter()
             .filter(|(_type, position, _index)| *position != start)
@@ -156,17 +175,18 @@ impl GoToLiftBottom {
     }
 }
 impl Decision for GoToLiftBottom {
-    fn get_cost(
+    fn cost_function(
         &self,
-        view: &GraphView<u32, SpecialPoint>,
+        view: &GraphView<TerrainPoint, SpecialPoint>,
+        skiier: &SkiierData,
         start: GridCoord,
-    ) -> (DecisionResult, u32, Path<u32>) {
+    ) -> (DecisionResult, u32, Path<u32>, SkiierData) {
         if self.lift_bottom == start {
             error!("invalid state for go to lift bottom, start==end");
         }
-        let path = dijkstra(&view, start, self.lift_bottom);
+        let path = dijkstra(&view, skiier, start, self.lift_bottom);
         let cost = max(path.cost(), 100);
-        (DecisionResult::Goto(self.lift_bottom), cost, path)
+        (DecisionResult::Goto(self.lift_bottom), cost, path, *skiier)
     }
     fn clone_box(&self) -> Box<dyn Decision> {
         Box::new(self.clone())
@@ -182,7 +202,7 @@ struct PartialLift {
     lift_top: Option<GridCoord>,
 }
 impl GoUpLift {
-    pub fn new(view: &GraphView<u32, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
+    pub fn new(view: &GraphView<TerrainPoint, SpecialPoint>, start: GridCoord) -> Vec<Box<Self>> {
         let mut lifts: HashMap<usize, PartialLift> = HashMap::new();
         view.special_points()
             .iter()
@@ -236,20 +256,22 @@ impl GoUpLift {
     }
 }
 impl Decision for GoUpLift {
-    fn get_cost(
+    fn cost_function(
         &self,
-        view: &GraphView<u32, SpecialPoint>,
+        view: &GraphView<TerrainPoint, SpecialPoint>,
+        skiier: &SkiierData,
         start: GridCoord,
-    ) -> (DecisionResult, u32, Path<u32>) {
+    ) -> (DecisionResult, u32, Path<u32>, SkiierData) {
         if self.lift_bottom != start {
             error!("invalid state for go to lift bottom, start==end");
         }
-        let path = dijkstra(&view, start, self.lift_top);
+        let path = dijkstra(&view, skiier, start, self.lift_top);
 
         (
             DecisionResult::Goto(self.lift_top),
             max(path.cost(), 100),
             path,
+            *skiier,
         )
     }
     fn clone_box(&self) -> Box<dyn Decision> {
@@ -261,7 +283,7 @@ pub struct GoToParkingLot {
     position: GridCoord,
 }
 impl GoToParkingLot {
-    pub fn new(view: &GraphView<u32, SpecialPoint>, _start: GridCoord) -> Vec<Box<Self>> {
+    pub fn new(view: &GraphView<TerrainPoint, SpecialPoint>, _start: GridCoord) -> Vec<Box<Self>> {
         view.special_points()
             .iter()
             .filter_map(|(point_type, position, _index)| match point_type {
@@ -274,14 +296,20 @@ impl GoToParkingLot {
     }
 }
 impl Decision for GoToParkingLot {
-    fn get_cost(
+    fn cost_function(
         &self,
-        view: &GraphView<u32, SpecialPoint>,
+        view: &GraphView<TerrainPoint, SpecialPoint>,
+        skiier: &SkiierData,
         start: GridCoord,
-    ) -> (DecisionResult, u32, Path<u32>) {
-        let path = dijkstra(&view, start, self.position);
-        let cost = min(path.cost(), 1);
-        (DecisionResult::Despawn, cost, path)
+    ) -> (DecisionResult, u32, Path<u32>, SkiierData) {
+        let path = dijkstra(&view, skiier, start, self.position);
+        if skiier.total_cost > 1000 {
+            let cost = path.cost() as f32 / (skiier.total_cost as f32 / 100.0);
+            let cost = max(cost as u32, 100);
+            (DecisionResult::Despawn, cost, path, *skiier)
+        } else {
+            (DecisionResult::Despawn, 10000, path, *skiier)
+        }
     }
     fn clone_box(&self) -> Box<dyn Decision> {
         Box::new(self.clone())
