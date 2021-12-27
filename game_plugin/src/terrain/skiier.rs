@@ -19,7 +19,7 @@ fn build_decision(
     view: &GraphView<u32, SpecialPoint>,
     start: GridCoord,
     base_cost: u32,
-) -> (SkiierData, Path) {
+) -> (SkiierData, Path<u32>) {
     let decisions = get_best_decision(&view, start, base_cost);
     let (result, cost, mut path) = decisions[0].get_cost(&view, start);
 
@@ -92,7 +92,7 @@ pub fn skiier_path_follow(
     mut skiiers: Query<
         (
             Entity,
-            &mut Path,
+            &mut Path<u32>,
             &mut PathT,
             &mut Transform,
             &mut SkiierData,

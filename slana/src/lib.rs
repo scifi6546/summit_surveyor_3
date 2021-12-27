@@ -26,15 +26,15 @@ impl std::fmt::Debug for GridCoord {
             .finish()
     }
 }
-pub trait WeightGetter<PointType, GraphWeight> {
-    fn get_weight(&self, start: PointType, end: PointType) -> GraphWeight;
-}
+
 pub trait GraphLayer<T> {
     /// type specifing special point
     type SpecialPoint;
     /// gets special points at coord
     fn get_special_pooints(&self) -> Vec<(Self::SpecialPoint, GridCoord)>;
     fn get_children(&self, coord: GridCoord) -> Vec<(GridCoord, T)>;
+    /// get specific point
+    fn get_node(&self, coord: GridCoord) -> Option<T>;
 }
 
 pub struct Grid<T: std::clone::Clone, SpecialType> {
@@ -88,7 +88,13 @@ impl<T: std::clone::Clone, S> Grid<T, S> {
     }
     /// Returns dimensions of grid
     pub fn size(&self) -> (usize, usize) {
-        (self.dim_x, self.dim_y)
+        (self.size_x(), self.size_y())
+    }
+    pub fn size_x(&self) -> usize {
+        self.dim_x
+    }
+    pub fn size_y(&self) -> usize {
+        self.dim_y
     }
     pub fn get(&self, x: i32, y: i32) -> &T {
         &self.data[self.get_dim(x as usize, y as usize)]
@@ -161,6 +167,14 @@ impl<T: std::clone::Clone, S> GraphLayer<T> for Grid<T, S> {
 
         return out;
     }
+    fn get_node(&self, coord: GridCoord) -> Option<T> {
+        let (x, y) = coord.to_xy();
+        if x >= 0 && x < self.size_x() as i32 && y >= 0 && y < self.size_y() as i32 {
+            Some(self.get(x, y).clone())
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -213,14 +227,22 @@ impl<'a, T, S> GraphView<'a, T, S> {
             })
             .collect()
     }
+    pub fn get_node(&self, coord: GridCoord) -> Vec<T> {
+        self.layers
+            .iter()
+            .map(|l| l.get_node(coord))
+            .filter_map(|n| n)
+            .collect()
+    }
 }
 #[derive(PartialEq, Eq, Clone)]
-pub struct State<T: Cost> {
-    cost: T,
+pub struct State<P, C: Cost> {
+    cost: C,
+    original_point: P,
     position: GridCoord,
     previous: Option<GridCoord>,
 }
-impl<T: Cost> std::cmp::Ord for State<T> {
+impl<T: PartialOrd + Eq, C: Cost> std::cmp::Ord for State<T, C> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         other
             .cost
@@ -228,7 +250,7 @@ impl<T: Cost> std::cmp::Ord for State<T> {
             .then_with(|| self.position.cmp(&other.position))
     }
 }
-impl<T: Cost> std::cmp::PartialOrd for State<T> {
+impl<T: PartialOrd + Eq, C: Cost> std::cmp::PartialOrd for State<T, C> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -239,19 +261,31 @@ pub trait Cost: Sized + Add + PartialEq + Ord + AddAssign + Clone {
     /// get max value
     fn max_val() -> Self;
 }
+pub trait WeightGetter<PointType, GraphWeight: Cost> {
+    fn get_weight(&self, start: &PointType, end: &PointType) -> GraphWeight;
+}
 /// Gets lowest cost path from start to end
-pub fn dijkstra<T: Cost, S>(graph: &GraphView<T, S>, start: GridCoord, end: GridCoord) -> Path<T> {
-    let mut dist: HashMap<GridCoord, (T, Option<GridCoord>)> = HashMap::new();
-    dist.insert(start, (T::zero(), None));
-    let mut heap = BinaryHeap::new();
-    heap.push(State {
-        cost: T::zero(),
-        position: start,
-        previous: None,
-    });
+pub fn dijkstra<T: PartialOrd + Eq + Clone, C: Cost, Getter: WeightGetter<T, C>, S>(
+    graph: &GraphView<T, S>,
+    getter: &Getter,
+    start: GridCoord,
+    end: GridCoord,
+) -> Path<C> {
+    let mut dist: HashMap<GridCoord, (C, Option<GridCoord>)> = HashMap::new();
+    dist.insert(start, (C::zero(), None));
+    let mut heap: BinaryHeap<State<T, C>> = BinaryHeap::new();
+    for point in graph.get_node(start) {
+        heap.push(State {
+            cost: C::zero(),
+            original_point: point,
+            position: start,
+            previous: None,
+        });
+    }
     while let Some(State {
         cost,
         position,
+        original_point,
         mut previous,
     }) = heap.pop()
     {
@@ -275,18 +309,20 @@ pub fn dijkstra<T: Cost, S>(graph: &GraphView<T, S>, start: GridCoord, end: Grid
                 points,
             };
         }
-        for (child_position, child_cost) in graph.get_children(position).iter() {
-            let mut cost: T = cost.clone();
+        for (child_position, child_node) in graph.get_children(position).iter() {
+            let child_cost = getter.get_weight(&original_point, child_node);
+            let mut cost: C = cost.clone();
             cost += child_cost.clone();
             let next = State {
                 cost,
+                original_point: child_node.clone(),
                 position: *child_position,
                 previous: Some(position),
             };
             let old_cost = if let Some((c, _)) = dist.get(child_position) {
                 c.clone()
             } else {
-                T::max_val()
+                C::max_val()
             };
             if next.cost < old_cost {
                 dist.insert(*child_position, (next.cost.clone(), Some(position)));
@@ -300,6 +336,12 @@ pub fn dijkstra<T: Cost, S>(graph: &GraphView<T, S>, start: GridCoord, end: Grid
 #[cfg(test)]
 mod tests {
     use super::*;
+    struct U32toWeight;
+    impl WeightGetter<u32, u32> for U32toWeight {
+        fn get_weight(&self, start: &u32, end: &u32) -> u32 {
+            *end
+        }
+    }
     #[test]
     fn new() {
         let grid: Grid<usize, u8> = Grid::from_val((100, 100), 0usize);
@@ -315,6 +357,7 @@ mod tests {
         let grid: Grid<u32, u32> = Grid::from_val((100, 100), 1u32);
         let path = dijkstra(
             &vec![&grid as &dyn GraphLayer<u32, SpecialPoint = _>].into(),
+            &U32toWeight,
             GridCoord::from_xy(0, 0),
             GridCoord::from_xy(0, 0),
         );
@@ -354,6 +397,7 @@ mod tests {
         let grid: Grid<u32, u32> = Grid::from_val((100, 100), 1u32);
         let path = dijkstra(
             &vec![&grid as &dyn GraphLayer<u32, SpecialPoint = u32>].into(),
+            &U32toWeight,
             GridCoord::from_xy(0, 0),
             GridCoord::from_xy(2, 0),
         );

@@ -17,7 +17,7 @@ pub trait Decision: std::fmt::Debug {
         &self,
         view: &GraphView<u32, SpecialPoint>,
         start: GridCoord,
-    ) -> (DecisionResult, u32, Path);
+    ) -> (DecisionResult, u32, Path<u32>);
     fn clone_box(&self) -> Box<dyn Decision>;
 }
 #[derive(Debug)]
@@ -160,7 +160,7 @@ impl Decision for GoToLiftBottom {
         &self,
         view: &GraphView<u32, SpecialPoint>,
         start: GridCoord,
-    ) -> (DecisionResult, u32, Path) {
+    ) -> (DecisionResult, u32, Path<u32>) {
         if self.lift_bottom == start {
             error!("invalid state for go to lift bottom, start==end");
         }
@@ -240,7 +240,7 @@ impl Decision for GoUpLift {
         &self,
         view: &GraphView<u32, SpecialPoint>,
         start: GridCoord,
-    ) -> (DecisionResult, u32, Path) {
+    ) -> (DecisionResult, u32, Path<u32>) {
         if self.lift_bottom != start {
             error!("invalid state for go to lift bottom, start==end");
         }
@@ -278,7 +278,7 @@ impl Decision for GoToParkingLot {
         &self,
         view: &GraphView<u32, SpecialPoint>,
         start: GridCoord,
-    ) -> (DecisionResult, u32, Path) {
+    ) -> (DecisionResult, u32, Path<u32>) {
         let path = dijkstra(&view, start, self.position);
         let cost = min(path.cost(), 1);
         (DecisionResult::Despawn, cost, path)
