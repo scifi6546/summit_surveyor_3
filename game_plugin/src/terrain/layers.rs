@@ -1,12 +1,18 @@
 use super::{Terrain, TerrainPoint};
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    render::{mesh::Indices, pipeline::PrimitiveTopology},
+};
 use slana::{GraphLayer, GridCoord};
+mod trails;
+pub use trails::TrailCollection;
 #[derive(Debug)]
 pub enum SpecialPoint {
     LiftBottom,
     LiftTop,
     /// What skiiers use to exit the ski resort
     ParkingLot,
+    Trail,
 }
 pub struct LiftLayer {
     top: GridCoord,
@@ -136,4 +142,79 @@ pub fn build_parkinglot(
         .insert(ParkingLotLayer {
             position: GridCoord::from_xy(x, y),
         });
+}
+pub fn build_trails(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    terrain: &Terrain,
+) {
+    let mut trails = TrailCollection::default();
+    let (s, e) = trails.add_trail(
+        GridCoord::from_xy(10, 10),
+        10.0,
+        GridCoord::from_xy(50, 50),
+        10.0,
+    );
+    trails
+        .append_trail(e, GridCoord::from_xy(60, 60), 10.0)
+        .expect("failed to add");
+    trails
+        .append_trail(e, GridCoord::from_xy(50, 40), 10.0)
+        .expect("failed to add");
+    for (coord, radius) in trails.iter_trails() {
+        let (x, y) = coord.to_xy();
+        let z = match terrain.grid.get(x, y) {
+            TerrainPoint::Ground { height } => *height,
+            _ => panic!("invalid point type"),
+        };
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+            material: materials.add(Color::rgb(0.15, 0.1, 0.1).into()),
+            transform: Transform::from_xyz(x as f32, z, y as f32),
+            ..Default::default()
+        });
+    }
+    for (start, end) in trails.iter_paths() {
+        commands.spawn_bundle(PbrBundle {
+            mesh: meshes.add(build_trail_mesh(
+                Vec3::new(start.x, terrain.grid.interpolate(start.x, start.y), start.y),
+                Vec3::new(end.x, terrain.grid.interpolate(end.x, end.y), end.y),
+            )),
+            material: materials.add(Color::rgb(0.15, 0.1, 0.1).into()),
+            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            ..Default::default()
+        });
+    }
+    commands.spawn().insert(trails);
+}
+fn build_trail_mesh(start: Vec3, end: Vec3) -> Mesh {
+    let slope = (start.z - end.z) / (start.x - end.x);
+    let theta = slope.atan();
+    info!("theta: {}", theta);
+    let dx1 = theta.sin();
+    let dy1 = theta.cos();
+    let theta_2 = (slope + std::f32::consts::FRAC_PI_2).atan();
+    let dx2 = theta_2.sin();
+    let dy2 = theta_2.cos();
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+    let position = vec![
+        [start.x + dx1, start.y, start.z + dy1],
+        [start.x + dx2, start.y, start.z + dy2],
+        [end.x + dx1, end.y, end.z + dy1],
+        [end.x + dx2, end.y, end.z + dy2],
+    ];
+    let indicies = vec![0, 2, 1, 1, 2, 0, 1, 2, 3, 3, 2, 1];
+    let normals = vec![
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ];
+    let uvs = vec![[1.0, 1.0], [1.0, 0.0], [0.0, 1.0], [0.0, 0.0]];
+    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, position);
+    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.set_indices(Some(Indices::U32(indicies)));
+    return mesh;
 }

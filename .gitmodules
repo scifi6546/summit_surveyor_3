@@ -1,3 +1,9 @@
 [submodule "smooth-bevy-cameras"]
 	path = smooth-bevy-cameras
 	url = git@github.com:scifi6546/smooth-bevy-cameras.git
+[submodule "bevy_mod_picking"]
+	path = bevy_mod_picking
+	url = git@github.com:scifi6546/bevy_mod_picking.git
+[submodule "bevy_mod_raycast"]
+	path = bevy_mod_raycast
+	url = git@github.com:scifi6546/bevy_mod_raycast.git

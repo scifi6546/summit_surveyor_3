@@ -4,12 +4,15 @@ use bevy::{
     prelude::*,
     render::{mesh::Indices, pipeline::PrimitiveTopology},
 };
-use layers::{build_lift, build_parkinglot, LiftLayer, ParkingLotLayer, SpecialPoint};
+use layers::{
+    build_lift, build_parkinglot, build_trails, LiftLayer, ParkingLotLayer, SpecialPoint,
+    TrailCollection,
+};
 use nalgebra::Vector3;
 use slana::Grid;
 mod skiier;
 pub struct TerrainPlugin;
-
+use bevy_mod_raycast::RayCastMesh;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_system_set(
@@ -28,6 +31,7 @@ pub enum TerrainPoint {
     LiftBottom { up_cost: u32 },
     LiftTop { up_cost: u32 },
     ParkingLot,
+    Trail,
 }
 impl slana::ToF32 for TerrainPoint {
     fn to_f32(&self) -> f32 {
@@ -37,6 +41,7 @@ impl slana::ToF32 for TerrainPoint {
         }
     }
 }
+pub struct TerrainPickingSet;
 pub struct Terrain {
     pub grid: Grid<TerrainPoint, SpecialPoint>,
 }
@@ -176,12 +181,15 @@ fn build_terrain(
         50,
     );
     build_parkinglot(&mut commands, &mut meshes, &mut materials, &terrain, 10, 10);
+    build_trails(&mut commands, &mut meshes, &mut materials, &terrain);
     let mesh = terrain.build_mesh();
     commands
         .spawn_bundle(PbrBundle {
             mesh: meshes.add(mesh),
-            material: materials.add(Color::rgb(0.8, 0.8, 0.8).into()),
+            material: materials.add(Color::rgb(0.8, 0.1, 0.8).into()),
             ..Default::default()
         })
-        .insert(terrain);
+        .insert_bundle(bevy_mod_picking::PickableBundle::default())
+        .insert(terrain)
+        .insert(RayCastMesh::<TerrainPickingSet>::default());
 }

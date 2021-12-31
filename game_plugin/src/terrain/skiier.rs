@@ -5,6 +5,8 @@ use decision::{get_best_decision, DecisionResult};
 use slana::{GraphLayer, GraphView, GridCoord, Path};
 use std::{cmp::max, f32};
 pub struct Skiier;
+use super::{LiftLayer, ParkingLotLayer, SpecialPoint, Terrain, TerrainPoint, TrailCollection};
+use bevy_mod_picking::PickableBundle;
 #[derive(Debug, Clone, Copy)]
 pub struct SkiierData {
     despawn_at_end: bool,
@@ -42,7 +44,7 @@ impl slana::WeightGetter<TerrainPoint, u32> for SkiierData {
 
                         if slope < 0.0 {
                             let weight = (slope - self.prefered_slope).abs() * 10.0;
-                            max(weight as u32, 1)
+                            max(weight as u32, 3)
                         } else {
                             max((slope * 100.0) as u32, 5)
                         }
@@ -50,11 +52,13 @@ impl slana::WeightGetter<TerrainPoint, u32> for SkiierData {
                     TerrainPoint::LiftBottom { up_cost } => up_cost,
                     TerrainPoint::LiftTop { up_cost } => up_cost,
                     TerrainPoint::ParkingLot => 1,
+                    TerrainPoint::Trail => 1,
                 }
             }
             TerrainPoint::LiftBottom { up_cost } => up_cost,
             TerrainPoint::LiftTop { up_cost } => up_cost,
             TerrainPoint::ParkingLot => 1,
+            TerrainPoint::Trail => 1,
         }
     }
 }
@@ -68,7 +72,7 @@ impl Default for SkiierData {
         }
     }
 }
-use super::{LiftLayer, ParkingLotLayer, SpecialPoint, Terrain, TerrainPoint};
+
 use std::cmp::min;
 const MAX_SKIIERS: usize = 10;
 pub struct PathT {
@@ -100,28 +104,39 @@ fn build_decision(
     } else {
         skiier.despawn_at_end = true;
     }
-    info!("current skiier total cost: {}", current_skiier.total_cost);
     return (current_skiier, path);
 }
 pub fn build_skiiers(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    layer_query: QuerySet<(
+        Query<&Terrain, ()>,
+        Query<&ParkingLotLayer, ()>,
+        Query<&LiftLayer, ()>,
+        Query<&TrailCollection, ()>,
+    )>,
     skiier_query: Query<(), With<Skiier>>,
-    terrain: Query<&Terrain, ()>,
-    lift_query: Query<&LiftLayer, ()>,
-    parkinglot_query: Query<&ParkingLotLayer, ()>,
 ) {
-    let layers: Vec<&dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>> = terrain
+    let layers: Vec<&dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>> = layer_query
+        .q0()
         .iter()
-        .map(|terrain| &terrain.grid as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>)
+        .map(|l| &l.grid as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>)
         .chain(
-            lift_query
+            layer_query
+                .q1()
                 .iter()
                 .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .chain(
-            parkinglot_query
+            layer_query
+                .q2()
+                .iter()
+                .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
+        )
+        .chain(
+            layer_query
+                .q3()
                 .iter()
                 .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
@@ -155,6 +170,7 @@ pub fn build_skiiers(
                 material: materials.add(Color::rgb(0.5, 0.1, 0.1).into()),
                 ..Default::default()
             })
+            .insert_bundle(PickableBundle::default())
             .insert(Skiier)
             .insert(skiier)
             .insert(PathT { time: 0.0 })
@@ -163,9 +179,12 @@ pub fn build_skiiers(
 }
 pub fn skiier_path_follow(
     mut commands: Commands,
-    terrain: Query<&Terrain, ()>,
-    lift_query: Query<&LiftLayer, ()>,
-    parkinglot_query: Query<&ParkingLotLayer, ()>,
+    layer_query: QuerySet<(
+        Query<&Terrain, ()>,
+        Query<&ParkingLotLayer, ()>,
+        Query<&LiftLayer, ()>,
+        Query<&TrailCollection, ()>,
+    )>,
     mut skiiers: Query<
         (
             Entity,
@@ -177,22 +196,31 @@ pub fn skiier_path_follow(
         With<Skiier>,
     >,
 ) {
-    let layers: Vec<&dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>> = terrain
+    let layers: Vec<&dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>> = layer_query
+        .q0()
         .iter()
-        .map(|terrain| &terrain.grid as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>)
+        .map(|l| &l.grid as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>)
         .chain(
-            lift_query
+            layer_query
+                .q1()
                 .iter()
                 .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .chain(
-            parkinglot_query
+            layer_query
+                .q2()
+                .iter()
+                .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
+        )
+        .chain(
+            layer_query
+                .q3()
                 .iter()
                 .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .collect();
     let view = layers.into();
-    let terrain = terrain.iter().next().unwrap();
+    let terrain = layer_query.q0().iter().next().unwrap();
     for (entity, mut path, mut path_time, mut transform, mut skiier_data) in skiiers.iter_mut() {
         if path.points.len() == 0 {
             continue;
@@ -215,7 +243,6 @@ pub fn skiier_path_follow(
                 transform.translation.z = y as f32;
             }
         } else {
-            info!("aat end skiier: {:#?}", skiier_data);
             if skiier_data.despawn_at_end {
                 commands.entity(entity).despawn();
             } else {
