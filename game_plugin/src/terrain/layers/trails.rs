@@ -11,9 +11,6 @@ pub struct TrailRef {
 }
 #[derive(Clone)]
 pub enum TrailSegment {
-    Termination {
-        radius: f32,
-    },
     Segment {
         radius: f32,
     },
@@ -60,7 +57,6 @@ impl<'a> std::iter::Iterator for PointIter<'a> {
                 n.coord,
                 match n.segment {
                     TrailSegment::Connection { radius, .. } => radius,
-                    TrailSegment::Termination { radius } => radius,
                     TrailSegment::Segment { radius, .. } => radius,
                 },
             ))
@@ -141,7 +137,7 @@ impl TrailCollection {
         end: GridCoord,
         end_radius: f32,
     ) -> (TrailRef, TrailRef) {
-        let start_segment = TrailSegment::Termination {
+        let start_segment = TrailSegment::Segment {
             radius: start_radius,
         };
         let start_index = TrailRef {
@@ -151,7 +147,7 @@ impl TrailCollection {
                 segment: start_segment,
             }),
         };
-        let end_segment = TrailSegment::Termination { radius: end_radius };
+        let end_segment = TrailSegment::Segment { radius: end_radius };
         let end_index = TrailRef {
             index: self.arena.insert(TrailNode {
                 coord: end,
@@ -197,11 +193,6 @@ impl TrailCollection {
             return Err(TrailError::RefDoesNotExist(src_segment));
         };
         start_segment.references.push(trail_connection);
-        let start_clone = start_segment.clone();
-        start_segment.segment = match start_clone.segment {
-            TrailSegment::Termination { radius } => TrailSegment::Segment { radius },
-            _ => return Err(TrailError::InvalidSegmentType),
-        };
         Ok(trail_connection)
     }
     pub fn append_trail(
@@ -210,25 +201,19 @@ impl TrailCollection {
         coord: GridCoord,
         radius: f32,
     ) -> Result<TrailRef, TrailError> {
-        let new_end = TrailRef {
+        let new_node = TrailRef {
             index: self.arena.insert(TrailNode {
                 coord,
-                references: vec![src.clone()],
-                segment: TrailSegment::Termination { radius },
+                references: vec![src],
+                segment: TrailSegment::Segment { radius },
             }),
         };
-        let old_end = if let Some(n) = self.arena.get_mut(src.index) {
-            n
+        if let Some(src_node) = self.arena.get_mut(src.index) {
+            src_node.references.push(new_node);
+            Ok(new_node)
         } else {
-            todo!("error when end is inserted")
-        };
-        old_end.references.push(new_end.clone());
-        let old_end_clone = old_end.clone();
-        old_end.segment = match old_end_clone.segment {
-            TrailSegment::Termination { radius } => TrailSegment::Segment { radius },
-            _ => todo!("error handeling when invalid src node"),
-        };
-        Ok(new_end)
+            todo!("error handeling")
+        }
     }
     pub fn iter_trails(&self) -> PointIter<'_> {
         PointIter {
