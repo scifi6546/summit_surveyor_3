@@ -14,7 +14,7 @@ use crate::loading::LoadingPlugin;
 use crate::camera::CameraPlugin;
 use crate::terrain::TerrainPlugin;
 
-use bevy::app::AppBuilder;
+use bevy::app::App;
 #[cfg(debug_assertions)]
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
@@ -24,7 +24,7 @@ use bevy_mod_picking::*;
 // See https://bevy-cheatbook.github.io/programming/states.html
 // Or https://github.com/bevyengine/bevy/blob/main/examples/ecs/state.rs
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
-enum GameState {
+pub enum GameState {
     // During the loading State the LoadingPlugin will load our assets
     Loading,
     // During this State the actual game logic is executed
@@ -36,7 +36,7 @@ pub mod prelude {
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         app.add_state(GameState::Loading)
             .add_plugin(PickingPlugin)
             .add_plugin(bevy_mod_picking::DefaultPickingPlugins)
@@ -49,8 +49,8 @@ impl Plugin for GamePlugin {
             .add_plugin(CameraInput)
             .add_plugin(ActionsPlugin)
             .add_plugin(InternalAudioPlugin)
-            .add_plugin(CameraPlugin)
-            .add_plugin(bevy_inspector_egui::WorldInspectorPlugin::new());
+            //    .add_plugin(bevy_inspector_egui::WorldInspectorPlugin::new())
+            .add_plugin(CameraPlugin);
 
         #[cfg(debug_assertions)]
         {

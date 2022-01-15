@@ -4,10 +4,13 @@ use bevy::prelude::*;
 use decision::{get_best_decision, DecisionResult};
 use slana::{GraphLayer, GraphView, GridCoord, Path};
 use std::{cmp::max, f32};
-pub struct Skiier;
+
 use super::{LiftLayer, ParkingLotLayer, SpecialPoint, Terrain, TerrainPoint, TrailCollection};
+
+#[derive(Component)]
+pub struct Skiier;
 use bevy_mod_picking::PickableBundle;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Component)]
 pub struct SkiierData {
     despawn_at_end: bool,
     total_cost: u32,
@@ -75,6 +78,7 @@ impl Default for SkiierData {
 
 use std::cmp::min;
 const MAX_SKIIERS: usize = 10;
+#[derive(Component)]
 pub struct PathT {
     time: f32,
 }
@@ -110,35 +114,29 @@ pub fn build_skiiers(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    layer_query: QuerySet<(
-        Query<&Terrain, ()>,
-        Query<&ParkingLotLayer, ()>,
-        Query<&LiftLayer, ()>,
-        Query<&TrailCollection, ()>,
-    )>,
+    terrain_query: Query<&Terrain, ()>,
+    parking_lot_query: Query<&ParkingLotLayer, ()>,
+    lift_query: Query<&LiftLayer, ()>,
+    trail_query: Query<&TrailCollection, ()>,
     skiier_query: Query<(), With<Skiier>>,
 ) {
-    let layers: Vec<&dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>> = layer_query
-        .q0()
+    let layers: Vec<&dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>> = terrain_query
         .iter()
-        .map(|l| &l.grid as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>)
+        .map(|t| &t.grid as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>)
         .chain(
-            layer_query
-                .q1()
+            parking_lot_query
                 .iter()
-                .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
+                .map(|p| p as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .chain(
-            layer_query
-                .q2()
+            lift_query
                 .iter()
-                .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
+                .map(|p| p as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .chain(
-            layer_query
-                .q3()
+            trail_query
                 .iter()
-                .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
+                .map(|p| p as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .collect();
 
@@ -179,12 +177,10 @@ pub fn build_skiiers(
 }
 pub fn skiier_path_follow(
     mut commands: Commands,
-    layer_query: QuerySet<(
-        Query<&Terrain, ()>,
-        Query<&ParkingLotLayer, ()>,
-        Query<&LiftLayer, ()>,
-        Query<&TrailCollection, ()>,
-    )>,
+    terrain_query: Query<&Terrain, ()>,
+    parking_lot_query: Query<&ParkingLotLayer, ()>,
+    lift_query: Query<&LiftLayer, ()>,
+    trail_query: Query<&TrailCollection, ()>,
     mut skiiers: Query<
         (
             Entity,
@@ -196,31 +192,28 @@ pub fn skiier_path_follow(
         With<Skiier>,
     >,
 ) {
-    let layers: Vec<&dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>> = layer_query
-        .q0()
+    let layers: Vec<&dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>> = terrain_query
         .iter()
-        .map(|l| &l.grid as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>)
+        .map(|t| &t.grid as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>)
         .chain(
-            layer_query
-                .q1()
+            parking_lot_query
                 .iter()
-                .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
+                .map(|p| p as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .chain(
-            layer_query
-                .q2()
+            lift_query
                 .iter()
-                .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
+                .map(|p| p as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .chain(
-            layer_query
-                .q3()
+            trail_query
                 .iter()
-                .map(|l| l as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
+                .map(|p| p as &dyn GraphLayer<TerrainPoint, SpecialPoint = SpecialPoint>),
         )
         .collect();
+
     let view = layers.into();
-    let terrain = layer_query.q0().iter().next().unwrap();
+    let terrain = terrain_query.iter().next().unwrap();
     for (entity, mut path, mut path_time, mut transform, mut skiier_data) in skiiers.iter_mut() {
         if path.points.len() == 0 {
             continue;

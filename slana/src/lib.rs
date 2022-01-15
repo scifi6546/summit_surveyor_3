@@ -185,7 +185,7 @@ impl<T: std::clone::Clone, S> GraphLayer<T> for Grid<T, S> {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, bevy::prelude::Component)]
 pub struct Path<T: Cost> {
     pub total_cost: T,
     pub points: Vec<GridCoord>,

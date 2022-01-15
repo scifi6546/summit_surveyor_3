@@ -1,7 +1,6 @@
 use crate::GameState;
-use bevy::prelude::*;
+use bevy::{prelude::*, render::texture::Image};
 use bevy_asset_loader::{AssetCollection, AssetLoader};
-use bevy_kira_audio::AudioSource;
 
 pub struct LoadingPlugin;
 
@@ -9,8 +8,9 @@ pub struct LoadingPlugin;
 /// Alternatively you can write the logic to load assets yourself
 /// If interested, take a look at https://bevy-cheatbook.github.io/features/assets.html
 impl Plugin for LoadingPlugin {
-    fn build(&self, app: &mut AppBuilder) {
-        AssetLoader::new(GameState::Loading, GameState::Playing)
+    fn build(&self, app: &mut App) {
+        AssetLoader::new(GameState::Loading)
+            .continue_to_state(GameState::Playing)
             .with_collection::<FontAssets>()
             .with_collection::<AudioAssets>()
             .with_collection::<TextureAssets>()
@@ -36,5 +36,5 @@ pub struct AudioAssets {
 #[derive(AssetCollection)]
 pub struct TextureAssets {
     #[asset(path = "textures/bevy.png")]
-    pub texture_bevy: Handle<Texture>,
+    pub texture_bevy: Handle<Image>,
 }
