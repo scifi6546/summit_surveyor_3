@@ -2,7 +2,7 @@ use super::GameState;
 mod layers;
 use bevy::{
     prelude::*,
-    render::{mesh::Indices, pipeline::PrimitiveTopology},
+    render::{mesh::Indices, render_resource::PrimitiveTopology},
 };
 use layers::{
     build_lift, build_parkinglot, build_trails, LiftLayer, ParkingLotLayer, SpecialPoint,
@@ -14,14 +14,14 @@ mod skiier;
 pub struct TerrainPlugin;
 use bevy_mod_raycast::RayCastMesh;
 impl Plugin for TerrainPlugin {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         app.add_system_set(
             SystemSet::on_enter(GameState::Playing).with_system(build_terrain.system()),
         )
         .add_system_set(
             SystemSet::on_update(GameState::Playing)
-                .with_system(skiier::build_skiiers.system())
-                .with_system(skiier::skiier_path_follow.system()),
+                .with_system(skiier::build_skiiers)
+                .with_system(skiier::skiier_path_follow),
         );
     }
 }
@@ -42,6 +42,7 @@ impl slana::ToF32 for TerrainPoint {
     }
 }
 pub struct TerrainPickingSet;
+#[derive(Component)]
 pub struct Terrain {
     pub grid: Grid<TerrainPoint, SpecialPoint>,
 }

@@ -1,7 +1,7 @@
 use super::{Terrain, TerrainPoint};
 use bevy::{
     prelude::*,
-    render::{mesh::Indices, pipeline::PrimitiveTopology},
+    render::{mesh::Indices, render_resource::PrimitiveTopology},
 };
 use slana::{GraphLayer, GridCoord};
 mod trails;
@@ -14,6 +14,7 @@ pub enum SpecialPoint {
     ParkingLot,
     Trail,
 }
+#[derive(Component)]
 pub struct LiftLayer {
     top: GridCoord,
     bottom: GridCoord,
@@ -98,6 +99,7 @@ pub fn build_lift(
     });
 }
 /// Graph Layer representing a parking lot. SKiiers use this to exit the stage
+#[derive(Component)]
 pub struct ParkingLotLayer {
     position: GridCoord,
 }

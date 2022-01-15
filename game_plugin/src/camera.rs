@@ -14,22 +14,20 @@ pub struct Player;
 /// This plugin handles player related stuff like movement
 /// Player logic is only active during the State `GameState::Playing`
 impl Plugin for CameraPlugin {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         app.add_plugin(LookTransformPlugin)
-            .add_plugin(OrbitCameraPlugin)
+            .add_plugin(OrbitCameraPlugin::new(false))
             .add_plugin(DefaultRaycastingPlugin::<TerrainPickingSet>::default())
             .add_startup_system(spawn_camera.system())
             .add_system_to_stage(CoreStage::PostUpdate, print_events.system())
             .add_system_set(
                 SystemSet::on_enter(GameState::Playing).with_system(spawn_light.system()),
             )
-            .add_system_set(
-                SystemSet::on_update(GameState::Playing).with_system(print_events.system()),
-            )
+            .add_system_set(SystemSet::on_update(GameState::Playing).with_system(print_events))
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
-                    .with_system(update_raycast_with_cursor.system())
+                    .with_system(update_raycast_with_cursor)
                     .before(RaycastSystem::BuildRays),
             )
             .add_system_set(
@@ -44,6 +42,7 @@ pub fn print_events(mut events: EventReader<bevy_mod_picking::PickingEvent>) {
         info!("This event happened! {:?}", event);
     }
 }
+#[derive(Component)]
 struct IntersectSphere;
 // Update our `RayCastSource` with the current cursor position every frame.
 fn update_raycast_with_cursor(
@@ -85,8 +84,8 @@ fn spawn_camera(
 }
 
 fn spawn_light(mut commands: Commands) {
-    commands.spawn_bundle(LightBundle {
-        light: Light {
+    commands.spawn_bundle(PointLightBundle {
+        point_light: PointLight {
             color: Color::rgb(1.0, 1.0, 1.0).into(),
             intensity: 8000.0,
             range: 500.0,

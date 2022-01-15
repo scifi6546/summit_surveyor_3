@@ -3,7 +3,7 @@ name = "game_plugin"
 version = "0.1.0"
 publish = false
 authors = ["Niklas Eicker <git@nikl.me>"] # ToDo: you are the author ;)
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,24 +13,25 @@ default = [
     "bevy/bevy_winit",
     "bevy/render",
     "bevy/png",
-    "bevy_kira_audio/ogg"
+#    "bevy_kira_audio/ogg"
 ]
 
 native = [
-    "bevy/bevy_wgpu",
+  #  "bevy/bevy_wgpu",
 ]
 
 [dependencies]
-bevy = { version = "0.5.0", default-features = false }
+bevy = { version = "0.6", default-features = false }
 smooth-bevy-cameras = {path="../smooth-bevy-cameras"}
 bevy_mod_picking = {path="../bevy_mod_picking"}
-bevy_mod_raycast = {path="../bevy_mod_raycast"}
+bevy_mod_raycast = "0.3.2"
+#bevy_mod_raycast = {path="../bevy_mod_raycast"}
 slana = {path = "../slana"}
-bevy_kira_audio = { version = "0.6.0" }
-bevy_asset_loader = { version = "0.6.0" }
+#bevy_kira_audio = { version = "0.6.0" }
+bevy_asset_loader = { version = "0.8.0" }
 rand = "0.8.3"
-bevy_atmosphere = "0.1.3"
+#bevy_atmosphere = "0.1.3"
 nalgebra = "0.29.0"
-winit = "0.24.0"
-bevy-inspector-egui = {version = "0.6.1"}
+#winit = "0.24.0"
+#bevy-inspector-egui = {version = "0.6.1"}
 generational-arena = "0.2.8"

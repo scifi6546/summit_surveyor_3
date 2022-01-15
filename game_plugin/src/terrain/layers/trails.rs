@@ -1,5 +1,5 @@
 use super::{SpecialPoint, TerrainPoint};
-
+use bevy::prelude::*;
 use generational_arena::{Arena, Index as ArenaIndex};
 use nalgebra::Vector2;
 use slana::{GraphLayer, GridCoord};
@@ -43,6 +43,7 @@ pub enum TrailError {
     ToFarDownTrail,
 }
 /// collection of trails
+#[derive(Component)]
 pub struct TrailCollection {
     arena: Arena<TrailNode>,
 }
