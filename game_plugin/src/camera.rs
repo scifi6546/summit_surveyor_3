@@ -1,6 +1,6 @@
 use crate::GameState;
 use bevy::prelude::*;
-use bevy_mod_picking::PickableBundle;
+
 use smooth_bevy_cameras::{
     controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
     LookTransformPlugin,
@@ -19,11 +19,9 @@ impl Plugin for CameraPlugin {
             .add_plugin(OrbitCameraPlugin::new(false))
             .add_plugin(DefaultRaycastingPlugin::<TerrainPickingSet>::default())
             .add_startup_system(spawn_camera.system())
-            .add_system_to_stage(CoreStage::PostUpdate, print_events.system())
             .add_system_set(
                 SystemSet::on_enter(GameState::Playing).with_system(spawn_light.system()),
             )
-            .add_system_set(SystemSet::on_update(GameState::Playing).with_system(print_events))
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
@@ -37,11 +35,7 @@ impl Plugin for CameraPlugin {
             );
     }
 }
-pub fn print_events(mut events: EventReader<bevy_mod_picking::PickingEvent>) {
-    for event in events.iter() {
-        info!("This event happened! {:?}", event);
-    }
-}
+
 #[derive(Component)]
 struct IntersectSphere;
 // Update our `RayCastSource` with the current cursor position every frame.
@@ -68,7 +62,6 @@ fn spawn_camera(
             Vec3::new(-2.0, 5.0, 5.0),
             Vec3::new(0., 0., 0.),
         ))
-        .insert_bundle(bevy_mod_picking::PickingCameraBundle::default())
         .insert(RayCastSource::<TerrainPickingSet>::new()); // cube
     commands
         .spawn_bundle(PbrBundle {
@@ -87,11 +80,11 @@ fn spawn_light(mut commands: Commands) {
     commands.spawn_bundle(PointLightBundle {
         point_light: PointLight {
             color: Color::rgb(1.0, 1.0, 1.0).into(),
-            intensity: 8000.0,
+            intensity: 800000.0,
             range: 500.0,
             ..Default::default()
         },
-        transform: Transform::from_xyz(50.0, 40.0, 50.0),
+        transform: Transform::from_xyz(50.0, 80.0, 50.0),
         ..Default::default()
     });
 }

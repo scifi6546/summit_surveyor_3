@@ -23,7 +23,7 @@ native = [
 [dependencies]
 bevy = { version = "0.6", default-features = false }
 smooth-bevy-cameras = {path="../smooth-bevy-cameras"}
-bevy_mod_picking = {path="../bevy_mod_picking"}
+#bevy_mod_picking = {path="../bevy_mod_picking"}
 bevy_mod_raycast = "0.3.2"
 #bevy_mod_raycast = {path="../bevy_mod_raycast"}
 slana = {path = "../slana"}

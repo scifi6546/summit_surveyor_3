@@ -5,7 +5,9 @@ use bevy::{
 };
 use slana::{GraphLayer, GridCoord};
 mod trails;
+pub mod trails_shader;
 pub use trails::TrailCollection;
+use trails_shader::TrailMaterial;
 #[derive(Debug)]
 pub enum SpecialPoint {
     LiftBottom,
@@ -148,9 +150,12 @@ pub fn build_parkinglot(
 pub fn build_trails(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    trail_materials: &mut ResMut<Assets<TrailMaterial>>,
     terrain: &Terrain,
 ) {
+    let trail_mat = trail_materials.add(TrailMaterial {
+        color: Color::rgba(0.0, 1.0, 0.0, 1.0),
+    });
     let mut trails = TrailCollection::default();
     let (s, e) = trails.add_trail(
         GridCoord::from_xy(10, 10),
@@ -170,20 +175,20 @@ pub fn build_trails(
             TerrainPoint::Ground { height } => *height,
             _ => panic!("invalid point type"),
         };
-        commands.spawn_bundle(PbrBundle {
+        commands.spawn_bundle(MaterialMeshBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-            material: materials.add(Color::rgb(0.15, 0.1, 0.1).into()),
+            material: trail_mat.clone(),
             transform: Transform::from_xyz(x as f32, z, y as f32),
             ..Default::default()
         });
     }
     for (start, end) in trails.iter_paths() {
-        commands.spawn_bundle(PbrBundle {
+        commands.spawn_bundle(MaterialMeshBundle {
             mesh: meshes.add(build_trail_mesh(
                 Vec3::new(start.x, terrain.grid.interpolate(start.x, start.y), start.y),
                 Vec3::new(end.x, terrain.grid.interpolate(end.x, end.y), end.y),
             )),
-            material: materials.add(Color::rgb(0.15, 0.1, 0.1).into()),
+            material: trail_mat.clone(),
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..Default::default()
         });

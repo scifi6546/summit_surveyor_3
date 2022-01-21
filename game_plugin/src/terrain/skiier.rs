@@ -9,7 +9,6 @@ use super::{LiftLayer, ParkingLotLayer, SpecialPoint, Terrain, TerrainPoint, Tra
 
 #[derive(Component)]
 pub struct Skiier;
-use bevy_mod_picking::PickableBundle;
 #[derive(Debug, Clone, Copy, Component)]
 pub struct SkiierData {
     despawn_at_end: bool,
@@ -168,7 +167,6 @@ pub fn build_skiiers(
                 material: materials.add(Color::rgb(0.5, 0.1, 0.1).into()),
                 ..Default::default()
             })
-            .insert_bundle(PickableBundle::default())
             .insert(Skiier)
             .insert(skiier)
             .insert(PathT { time: 0.0 })

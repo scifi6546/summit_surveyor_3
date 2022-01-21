@@ -530,14 +530,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_mod_picking"
-version = "0.4.1-alpha.0"
-dependencies = [
- "bevy",
- "bevy_mod_raycast",
-]
-
-[[package]]
 name = "bevy_mod_raycast"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1577,7 +1569,6 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_asset_loader",
- "bevy_mod_picking",
  "bevy_mod_raycast",
  "generational-arena",
  "nalgebra",

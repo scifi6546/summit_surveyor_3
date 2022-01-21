@@ -221,6 +221,7 @@ impl TrailCollection {
             iter: self.arena.iter(),
         }
     }
+    /// Iterates through all paths in the trail collection.
     pub fn iter_paths(&self) -> PathIter<'_> {
         PathIter {
             current_node: None,

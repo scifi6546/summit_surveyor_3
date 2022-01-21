@@ -13,6 +13,7 @@ use slana::Grid;
 mod skiier;
 pub struct TerrainPlugin;
 use bevy_mod_raycast::RayCastMesh;
+use layers::trails_shader::TrailMaterial;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_system_set(
@@ -22,7 +23,8 @@ impl Plugin for TerrainPlugin {
             SystemSet::on_update(GameState::Playing)
                 .with_system(skiier::build_skiiers)
                 .with_system(skiier::skiier_path_follow),
-        );
+        )
+        .add_plugin(layers::trails_shader::TrailShaderPlugin);
     }
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -155,6 +157,7 @@ fn build_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut trail_material: ResMut<Assets<TrailMaterial>>,
 ) {
     // let terrain = Terrain::slope(100, 100);
     //  let terrain = Terrain::output();
@@ -182,7 +185,7 @@ fn build_terrain(
         50,
     );
     build_parkinglot(&mut commands, &mut meshes, &mut materials, &terrain, 10, 10);
-    build_trails(&mut commands, &mut meshes, &mut materials, &terrain);
+    build_trails(&mut commands, &mut meshes, &mut trail_material, &terrain);
     let mesh = terrain.build_mesh();
     commands
         .spawn_bundle(PbrBundle {
@@ -190,7 +193,6 @@ fn build_terrain(
             material: materials.add(Color::rgb(0.8, 0.1, 0.8).into()),
             ..Default::default()
         })
-        .insert_bundle(bevy_mod_picking::PickableBundle::default())
         .insert(terrain)
         .insert(RayCastMesh::<TerrainPickingSet>::default());
 }
